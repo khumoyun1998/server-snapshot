@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Cpu, MemoryStick, HardDrive } from "lucide-react";
 import HeaderStrip from "@/components/dashboard/HeaderStrip";
 import MetricCard from "@/components/dashboard/MetricCard";
@@ -6,40 +6,34 @@ import ProcessTable from "@/components/dashboard/ProcessTable";
 import SystemInfoPanel from "@/components/dashboard/SystemInfoPanel";
 import DiskTable from "@/components/dashboard/DiskTable";
 import CpuCoreGrid from "@/components/dashboard/CpuCoreGrid";
-import {
-  getServerInfo,
-  getCpuInfo,
-  getMemInfo,
-  getDiskInfo,
-  getTopProcessesByCpu,
-  getTopProcessesByMem,
-  getNetworkInfo,
-  formatBytes,
-  type CpuInfo,
-  type MemInfo,
-} from "@/lib/mockServerData";
+import { formatBytes } from "@/lib/mockServerData";
+import { fetchMetrics, type MetricsResponse } from "@/lib/serverApi";
 
 const Index = () => {
-  const server = getServerInfo();
-  const disks = getDiskInfo();
-  const processesByCpu = getTopProcessesByCpu();
-  const processesByMem = getTopProcessesByMem();
-  const network = getNetworkInfo();
+  const [data, setData] = useState<MetricsResponse | null>(null);
 
-  const [cpu, setCpu] = useState<CpuInfo>(getCpuInfo());
-  const [mem, setMem] = useState<MemInfo>(getMemInfo());
-
-  // Simulate live data refresh
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCpu(getCpuInfo());
-      setMem(getMemInfo());
-    }, 2000);
-    return () => clearInterval(interval);
+  const refresh = useCallback(async () => {
+    const metrics = await fetchMetrics();
+    setData(metrics);
   }, []);
 
+  useEffect(() => {
+    refresh();
+    const interval = setInterval(refresh, 2000);
+    return () => clearInterval(interval);
+  }, [refresh]);
+
+  if (!data) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-muted-foreground font-mono text-sm animate-pulse">Loading metrics…</p>
+      </div>
+    );
+  }
+
+  const { server, cpu, memory: mem, disks, processesByCpu, processesByMem, network } = data;
   const memPct = (mem.used / mem.total) * 100;
-  const mainDiskPct = (disks[0].used / disks[0].total) * 100;
+  const mainDiskPct = disks.length > 0 ? (disks[0].used / disks[0].total) * 100 : 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -68,13 +62,15 @@ const Index = () => {
               { label: "Swap", value: `${formatBytes(mem.swapUsed)} / ${formatBytes(mem.swapTotal)}` },
             ]}
           />
-          <MetricCard
-            title="Disk (/)"
-            icon={<HardDrive className="h-4 w-4 text-primary" />}
-            value={`${formatBytes(disks[0].used)} / ${formatBytes(disks[0].total)}`}
-            percentage={mainDiskPct}
-            subtitle={`${disks[0].device} · ${disks[0].filesystem}`}
-          />
+          {disks.length > 0 && (
+            <MetricCard
+              title={`Disk (${disks[0].mountPoint})`}
+              icon={<HardDrive className="h-4 w-4 text-primary" />}
+              value={`${formatBytes(disks[0].used)} / ${formatBytes(disks[0].total)}`}
+              percentage={mainDiskPct}
+              subtitle={`${disks[0].device} · ${disks[0].filesystem}`}
+            />
+          )}
         </div>
 
         {/* CPU Cores + Disks */}
