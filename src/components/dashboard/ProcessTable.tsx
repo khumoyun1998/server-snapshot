@@ -3,14 +3,16 @@ import { cn } from "@/lib/utils";
 
 interface ProcessTableProps {
   processes: ProcessInfo[];
+  title?: string;
+  subtitle?: string;
 }
 
-const ProcessTable = ({ processes }: ProcessTableProps) => {
+const ProcessTable = ({ processes, title = "Top 5 Processes", subtitle = "By CPU usage" }: ProcessTableProps) => {
   return (
     <div className="bg-card border rounded-md">
       <div className="px-4 py-3 border-b">
-        <h3 className="text-sm font-semibold text-foreground">Top 5 Processes</h3>
-        <p className="text-xs text-muted-foreground mt-0.5">By CPU usage</p>
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">

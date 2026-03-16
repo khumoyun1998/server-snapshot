@@ -11,7 +11,8 @@ import {
   getCpuInfo,
   getMemInfo,
   getDiskInfo,
-  getTopProcesses,
+  getTopProcessesByCpu,
+  getTopProcessesByMem,
   getNetworkInfo,
   formatBytes,
   type CpuInfo,
@@ -21,7 +22,8 @@ import {
 const Index = () => {
   const server = getServerInfo();
   const disks = getDiskInfo();
-  const processes = getTopProcesses();
+  const processesByCpu = getTopProcessesByCpu();
+  const processesByMem = getTopProcessesByMem();
   const network = getNetworkInfo();
 
   const [cpu, setCpu] = useState<CpuInfo>(getCpuInfo());
@@ -81,8 +83,11 @@ const Index = () => {
           <DiskTable disks={disks} />
         </div>
 
-        {/* Process Table */}
-        <ProcessTable processes={processes} />
+        {/* Process Tables */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <ProcessTable processes={processesByCpu} title="Top 5 Processes" subtitle="By CPU usage" />
+          <ProcessTable processes={processesByMem} title="Top 5 Processes" subtitle="By Memory usage" />
+        </div>
 
         {/* System Info + Network */}
         <SystemInfoPanel server={server} network={network} />
