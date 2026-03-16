@@ -84,10 +84,8 @@ const Index = () => {
         </div>
 
         {/* Process Tables */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <ProcessTable processes={processesByCpu} title="Top 5 Processes" subtitle="By CPU usage" />
-          <ProcessTable processes={processesByMem} title="Top 5 Processes" subtitle="By Memory usage" />
-        </div>
+        <ProcessTable processes={processesByCpu} title="Top 5 Processes" subtitle="By CPU usage" />
+        <ProcessTable processes={processesByMem} title="Top 5 Processes" subtitle="By Memory usage" />
 
         {/* System Info + Network */}
         <SystemInfoPanel server={server} network={network} />
