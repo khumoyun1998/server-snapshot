@@ -3,6 +3,8 @@ import { cn } from "@/lib/utils";
 
 interface ProcessTableProps {
   processes: ProcessInfo[];
+  title?: string;
+  subtitle?: string;
 }
 
 const ProcessTable = ({ processes }: ProcessTableProps) => {
