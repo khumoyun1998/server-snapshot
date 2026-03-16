@@ -7,14 +7,14 @@ import SystemInfoPanel from "@/components/dashboard/SystemInfoPanel";
 import DiskTable from "@/components/dashboard/DiskTable";
 import CpuCoreGrid from "@/components/dashboard/CpuCoreGrid";
 import { formatBytes } from "@/lib/mockServerData";
-import { fetchMetrics, type MetricsResponse } from "@/lib/serverApi";
+import { fetchMetrics, type MetricsResult } from "@/lib/serverApi";
 
 const Index = () => {
-  const [data, setData] = useState<MetricsResponse | null>(null);
+  const [result, setResult] = useState<MetricsResult | null>(null);
 
   const refresh = useCallback(async () => {
-    const metrics = await fetchMetrics();
-    setData(metrics);
+    const r = await fetchMetrics();
+    setResult(r);
   }, []);
 
   useEffect(() => {
@@ -23,7 +23,7 @@ const Index = () => {
     return () => clearInterval(interval);
   }, [refresh]);
 
-  if (!data) {
+  if (!result) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <p className="text-muted-foreground font-mono text-sm animate-pulse">Loading metrics…</p>
@@ -31,16 +31,16 @@ const Index = () => {
     );
   }
 
+  const { data, source } = result;
   const { server, cpu, memory: mem, disks, processesByCpu, processesByMem, network } = data;
   const memPct = (mem.used / mem.total) * 100;
   const mainDiskPct = disks.length > 0 ? (disks[0].used / disks[0].total) * 100 : 0;
 
   return (
     <div className="min-h-screen bg-background">
-      <HeaderStrip server={server} />
+      <HeaderStrip server={server} dataSource={source} />
 
       <main className="container py-6 space-y-4">
-        {/* Quick Look Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <MetricCard
             title="CPU Usage"
@@ -73,17 +73,14 @@ const Index = () => {
           )}
         </div>
 
-        {/* CPU Cores + Disks */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <CpuCoreGrid coreUsages={cpu.coreUsages} />
           <DiskTable disks={disks} />
         </div>
 
-        {/* Process Tables */}
         <ProcessTable processes={processesByCpu} title="Top 5 Processes" subtitle="By CPU usage" />
         <ProcessTable processes={processesByMem} title="Top 5 Processes" subtitle="By Memory usage" />
 
-        {/* System Info + Network */}
         <SystemInfoPanel server={server} network={network} />
       </main>
     </div>
