@@ -27,26 +27,36 @@ export interface MetricsResponse {
   network: NetworkInfo[];
 }
 
-// In production (served by the Python agent), the API is on the same origin.
-// In development (Vite dev server), you can set VITE_API_URL to point to the agent.
+export type DataSource = "live" | "mock";
+
+export interface MetricsResult {
+  data: MetricsResponse;
+  source: DataSource;
+}
+
 const API_URL = import.meta.env.VITE_API_URL || "";
 
-export async function fetchMetrics(): Promise<MetricsResponse> {
+export async function fetchMetrics(): Promise<MetricsResult> {
   try {
     const res = await fetch(`${API_URL}/api/metrics`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
+    const contentType = res.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) throw new Error("Not JSON");
+    const data: MetricsResponse = await res.json();
+    return { data, source: "live" };
   } catch {
-    // Fallback to mock data when API is unavailable (e.g., during development)
     console.warn("API unavailable, using mock data");
     return {
-      server: getMockServer(),
-      cpu: getMockCpu(),
-      memory: getMockMem(),
-      disks: getMockDisks(),
-      processesByCpu: getMockProcCpu(),
-      processesByMem: getMockProcMem(),
-      network: getMockNetwork(),
+      data: {
+        server: getMockServer(),
+        cpu: getMockCpu(),
+        memory: getMockMem(),
+        disks: getMockDisks(),
+        processesByCpu: getMockProcCpu(),
+        processesByMem: getMockProcMem(),
+        network: getMockNetwork(),
+      },
+      source: "mock",
     };
   }
 }
