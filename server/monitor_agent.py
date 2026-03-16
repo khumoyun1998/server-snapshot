@@ -232,4 +232,4 @@ if __name__ == "__main__":
     print("  Open http://localhost:5050")
     print("  API: http://localhost:5050/api/metrics")
     print("=" * 50)
-    app.run(host="0.0.0.0", port=5050, debug=False)
+    app.run(host="127.0.0.1", port=5050, debug=False)
