@@ -89,12 +89,20 @@ export const getDiskInfo = (): DiskInfo[] => [
   { device: "/dev/sdc1", mountPoint: "/backup", total: 2048000, used: 890000, filesystem: "ext4" },
 ];
 
-export const getTopProcesses = (): ProcessInfo[] => [
+export const getTopProcessesByCpu = (): ProcessInfo[] => [
   { pid: 1842, name: "node", user: "www-data", cpu: 24.3, mem: 8.7, status: "running" },
   { pid: 2901, name: "postgres", user: "postgres", cpu: 18.1, mem: 12.4, status: "running" },
   { pid: 3422, name: "nginx", user: "root", cpu: 11.6, mem: 3.2, status: "running" },
   { pid: 4105, name: "redis-server", user: "redis", cpu: 7.8, mem: 5.1, status: "running" },
   { pid: 5230, name: "python3", user: "deploy", cpu: 5.2, mem: 6.8, status: "sleeping" },
+];
+
+export const getTopProcessesByMem = (): ProcessInfo[] => [
+  { pid: 2901, name: "postgres", user: "postgres", cpu: 18.1, mem: 12.4, status: "running" },
+  { pid: 1842, name: "node", user: "www-data", cpu: 24.3, mem: 8.7, status: "running" },
+  { pid: 6012, name: "java", user: "tomcat", cpu: 4.1, mem: 9.3, status: "running" },
+  { pid: 5230, name: "python3", user: "deploy", cpu: 5.2, mem: 6.8, status: "sleeping" },
+  { pid: 4105, name: "redis-server", user: "redis", cpu: 7.8, mem: 5.1, status: "running" },
 ];
 
 export const getNetworkInfo = (): NetworkInfo[] => [
