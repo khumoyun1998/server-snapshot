@@ -22,7 +22,8 @@ import {
 const Index = () => {
   const server = getServerInfo();
   const disks = getDiskInfo();
-  const processes = getTopProcesses();
+  const processesByCpu = getTopProcessesByCpu();
+  const processesByMem = getTopProcessesByMem();
   const network = getNetworkInfo();
 
   const [cpu, setCpu] = useState<CpuInfo>(getCpuInfo());
