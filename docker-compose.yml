@@ -15,6 +15,13 @@ services:
     # Note: full host metrics (CPU/mem of the machine itself) are most accurate
     # when the agent runs directly on the host — the container view is partial.
     pid: "host"
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      DASHBOARD_URL: ${DASHBOARD_URL:-}
+      ALERT_CPU: ${ALERT_CPU:-90}
+      ALERT_MEM: ${ALERT_MEM:-90}
+      ALERT_DISK: ${ALERT_DISK:-85}
     restart: unless-stopped
 
 networks:

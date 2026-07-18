@@ -59,6 +59,26 @@ pip install -r server/requirements.txt
 python server/monitor_agent.py       # http://localhost:5050
 ```
 
+## Telegram alerts & remote status (optional)
+
+The agent can send Telegram alerts when CPU / memory / disk cross thresholds
+(with recovery messages) and answer `/status` in chat — so you can check the
+server from your phone without opening the dashboard. Every message carries an
+"Open dashboard" button when `DASHBOARD_URL` is set.
+
+Create a bot with [@BotFather](https://t.me/BotFather), find your chat id with
+[@userinfobot](https://t.me/userinfobot), then put these into `.env` next to
+the compose file:
+
+| Variable | Meaning | Default |
+|---|---|---|
+| `TELEGRAM_BOT_TOKEN` | bot token (empty = feature disabled) | — |
+| `TELEGRAM_CHAT_ID` | chat that receives alerts and may use commands | — |
+| `DASHBOARD_URL` | link for the inline dashboard button | — |
+| `ALERT_CPU` / `ALERT_MEM` | percent thresholds | 90 |
+| `ALERT_DISK` | percent threshold | 85 |
+| `ALERT_COOLDOWN` | seconds between repeat alerts | 1800 |
+
 ## Tests
 
 ```sh

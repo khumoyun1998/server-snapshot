@@ -16,6 +16,15 @@ services:
     image: hxolmetov/server-snapshot-agent:latest
     # pid: host lets the agent see host processes instead of just the container's.
     pid: "host"
+    environment:
+      # Telegram integration (optional — leave empty to disable).
+      # Set these in a .env file next to this compose file.
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      DASHBOARD_URL: ${DASHBOARD_URL:-}
+      ALERT_CPU: ${ALERT_CPU:-90}
+      ALERT_MEM: ${ALERT_MEM:-90}
+      ALERT_DISK: ${ALERT_DISK:-85}
     restart: unless-stopped
 
 networks:

@@ -25,6 +25,8 @@ from collections import deque
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
+import telegram_bot
+
 try:
     import psutil
 except ImportError:
@@ -63,6 +65,27 @@ def _sample_loop():
 
 
 threading.Thread(target=_sample_loop, daemon=True).start()
+
+
+def _format_mb(mb):
+    return f"{mb / 1024:.1f} GB" if mb >= 1024 else f"{mb} MB"
+
+
+def get_status_snapshot():
+    """Compact snapshot used by the Telegram bot."""
+    mem = psutil.virtual_memory()
+    disk = psutil.disk_usage("/")
+    load = os.getloadavg() if hasattr(os, "getloadavg") else (0, 0, 0)
+    return {
+        "hostname": socket.gethostname(),
+        "uptime": get_uptime(),
+        "cpu": psutil.cpu_percent(interval=None),
+        "mem": mem.percent,
+        "memUsed": _format_mb(round(mem.used / (1024 * 1024))),
+        "memTotal": _format_mb(round(mem.total / (1024 * 1024))),
+        "disk": disk.percent,
+        "loadAvg": " / ".join(f"{x:.2f}" for x in load),
+    }
 
 
 def get_uptime():
@@ -295,6 +318,9 @@ def fallback(e):
     if os.path.exists(index_path):
         return send_from_directory(app.static_folder, "index.html")
     return "Not found", 404
+
+
+telegram_bot.start(get_status_snapshot)
 
 
 if __name__ == "__main__":
