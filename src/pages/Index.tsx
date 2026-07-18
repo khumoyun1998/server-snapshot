@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import { Cpu, MemoryStick, HardDrive } from "lucide-react";
 import HeaderStrip from "@/components/dashboard/HeaderStrip";
 import MetricCard from "@/components/dashboard/MetricCard";
@@ -6,8 +6,10 @@ import ProcessTable from "@/components/dashboard/ProcessTable";
 import SystemInfoPanel from "@/components/dashboard/SystemInfoPanel";
 import DiskTable from "@/components/dashboard/DiskTable";
 import CpuCoreGrid from "@/components/dashboard/CpuCoreGrid";
-import HistoryCharts from "@/components/dashboard/HistoryCharts";
 import WatchedPanel from "@/components/dashboard/WatchedPanel";
+
+// recharts is heavy — keep it in a lazy chunk so the initial load stays small
+const HistoryCharts = lazy(() => import("@/components/dashboard/HistoryCharts"));
 import { formatBytes } from "@/lib/mockServerData";
 import {
   fetchMetrics,
@@ -94,7 +96,9 @@ const Index = () => {
 
         <WatchedPanel base={base} />
 
-        <HistoryCharts base={base} />
+        <Suspense fallback={null}>
+          <HistoryCharts base={base} />
+        </Suspense>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <CpuCoreGrid coreUsages={cpu.coreUsages} />
