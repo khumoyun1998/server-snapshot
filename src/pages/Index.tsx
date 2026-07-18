@@ -7,6 +7,7 @@ import SystemInfoPanel from "@/components/dashboard/SystemInfoPanel";
 import DiskTable from "@/components/dashboard/DiskTable";
 import CpuCoreGrid from "@/components/dashboard/CpuCoreGrid";
 import HistoryCharts from "@/components/dashboard/HistoryCharts";
+import WatchedPanel from "@/components/dashboard/WatchedPanel";
 import { formatBytes } from "@/lib/mockServerData";
 import { fetchMetrics, type MetricsResult } from "@/lib/serverApi";
 
@@ -73,6 +74,8 @@ const Index = () => {
             />
           )}
         </div>
+
+        <WatchedPanel />
 
         <HistoryCharts />
 

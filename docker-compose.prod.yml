@@ -25,6 +25,11 @@ services:
       ALERT_CPU: ${ALERT_CPU:-90}
       ALERT_MEM: ${ALERT_MEM:-90}
       ALERT_DISK: ${ALERT_DISK:-85}
+      # Comma-separated process names to watch, e.g. "dockerd,ngrok,sshd"
+      WATCH_PROCESSES: ${WATCH_PROCESSES:-}
+    volumes:
+      # read-only Docker socket → container list + stats on the dashboard
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     restart: unless-stopped
 
   # Public HTTPS tunnel for the dashboard (Telegram Web App needs https).

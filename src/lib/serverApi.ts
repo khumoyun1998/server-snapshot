@@ -43,7 +43,59 @@ export interface HistoryPoint {
   txRate: number; // KB/s
 }
 
+export interface WatchedProcess {
+  name: string;
+  count: number;
+  cpu: number; // %
+  mem: number; // %
+  running: boolean;
+}
+
+export interface ContainerInfo {
+  name: string;
+  image: string;
+  state: string; // running | exited | ...
+  status: string; // "Up 2 hours"
+  cpu: number; // %
+  memUsed: number; // MB
+  memLimit: number; // MB
+}
+
+export interface WatchResponse {
+  processes: WatchedProcess[];
+  dockerAvailable: boolean;
+  containers: ContainerInfo[];
+}
+
 const API_URL = import.meta.env.VITE_API_URL || "";
+
+const MOCK_WATCH: WatchResponse = {
+  processes: [
+    { name: "dockerd", count: 1, cpu: 1.2, mem: 3.4, running: true },
+    { name: "ngrok", count: 1, cpu: 0.3, mem: 1.1, running: true },
+    { name: "sshd", count: 2, cpu: 0.0, mem: 0.4, running: true },
+    { name: "nginx", count: 0, cpu: 0, mem: 0, running: false },
+  ],
+  dockerAvailable: true,
+  containers: [
+    { name: "app-web-1", image: "myapp:latest", state: "running", status: "Up 2 hours", cpu: 2.4, memUsed: 128, memLimit: 1900 },
+    { name: "app-db-1", image: "postgres:16-alpine", state: "running", status: "Up 2 hours", cpu: 0.8, memUsed: 96, memLimit: 1900 },
+    { name: "app-migrate-1", image: "myapp:latest", state: "exited", status: "Exited (0) 2 hours ago", cpu: 0, memUsed: 0, memLimit: 0 },
+  ],
+};
+
+export async function fetchWatch(): Promise<{ data: WatchResponse; source: DataSource }> {
+  try {
+    const res = await fetch(`${API_URL}/api/watch`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const contentType = res.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) throw new Error("Not JSON");
+    const data: WatchResponse = await res.json();
+    return { data, source: "live" };
+  } catch {
+    return { data: MOCK_WATCH, source: "mock" };
+  }
+}
 
 function generateMockHistory(minutes: number): HistoryPoint[] {
   const now = Math.floor(Date.now() / 1000);

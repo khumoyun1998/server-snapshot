@@ -25,6 +25,7 @@ from collections import deque
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
+import docker_stats
 import telegram_bot
 
 try:
@@ -269,6 +270,48 @@ def metrics():
     })
 
 
+# Comma-separated process names to watch, e.g. "dockerd,ngrok,sshd,nginx"
+WATCH_PROCESSES = [
+    p.strip().lower()
+    for p in os.environ.get("WATCH_PROCESSES", "").split(",")
+    if p.strip()
+]
+
+
+def get_watched_processes():
+    """For each watched name: match count and summed CPU/MEM."""
+    found = {name: {"name": name, "count": 0, "cpu": 0.0, "mem": 0.0} for name in WATCH_PROCESSES}
+    if not WATCH_PROCESSES:
+        return []
+    for p in psutil.process_iter(["name", "cmdline", "cpu_percent", "memory_percent"]):
+        try:
+            pname = (p.info["name"] or "").lower()
+            cmd = " ".join(p.info["cmdline"] or []).lower()
+            for watch in WATCH_PROCESSES:
+                if watch in pname or watch in cmd:
+                    f = found[watch]
+                    f["count"] += 1
+                    f["cpu"] += p.info["cpu_percent"] or 0
+                    f["mem"] += p.info["memory_percent"] or 0
+                    break
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    return [
+        {**f, "cpu": round(f["cpu"], 1), "mem": round(f["mem"], 1), "running": f["count"] > 0}
+        for f in found.values()
+    ]
+
+
+@app.route("/api/watch")
+def watch():
+    containers = docker_stats.get_containers()
+    return jsonify({
+        "processes": get_watched_processes(),
+        "dockerAvailable": containers["available"],
+        "containers": containers["containers"],
+    })
+
+
 @app.route("/api/history")
 def history():
     try:
@@ -320,7 +363,7 @@ def fallback(e):
     return "Not found", 404
 
 
-telegram_bot.start(get_status_snapshot)
+telegram_bot.start(get_status_snapshot, get_watched_processes)
 
 
 if __name__ == "__main__":

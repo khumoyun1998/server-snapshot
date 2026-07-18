@@ -78,6 +78,11 @@ the compose file:
 | `ALERT_CPU` / `ALERT_MEM` | percent thresholds | 90 |
 | `ALERT_DISK` | percent threshold | 85 |
 | `ALERT_COOLDOWN` | seconds between repeat alerts | 1800 |
+| `WATCH_PROCESSES` | comma-separated process names to watch (e.g. `dockerd,ngrok,sshd`); Telegram alerts fire when one disappears | — |
+
+The dashboard also shows all Docker containers with per-container CPU/memory
+when the Docker socket is mounted (see `docker-compose.prod.yml`; remove the
+volume to disable).
 
 ### Telegram Web App via ngrok
 

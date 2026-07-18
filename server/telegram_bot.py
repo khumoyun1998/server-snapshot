@@ -113,6 +113,29 @@ def _alert_loop(get_status):
                 )
 
 
+def _process_watch_loop(get_watched, get_status):
+    known = {}  # name -> was running
+    first = True
+    while True:
+        time.sleep(60)
+        try:
+            watched = get_watched()
+            host = get_status()["hostname"]
+        except Exception:
+            continue
+        for proc in watched:
+            name, running = proc["name"], proc["running"]
+            was = known.get(name)
+            known[name] = running
+            if first or was is None:
+                continue  # no alert on startup / newly added names
+            if was and not running:
+                _send(f"🔴 <b>Process down</b> on <b>{host}</b>\n<code>{name}</code> is not running")
+            elif not was and running:
+                _send(f"🟢 <b>Process back</b> on <b>{host}</b>\n<code>{name}</code> is running again")
+        first = False
+
+
 def _command_loop(get_status):
     offset = 0
     while True:
@@ -141,11 +164,15 @@ def _command_loop(get_status):
                 )
 
 
-def start(get_status):
+def start(get_status, get_watched=None):
     """Start alert + command threads. No-op when token/chat id are missing."""
     if not TOKEN or not CHAT_ID:
         print("[telegram] TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set — disabled")
         return
     threading.Thread(target=_alert_loop, args=(get_status,), daemon=True).start()
     threading.Thread(target=_command_loop, args=(get_status,), daemon=True).start()
+    if get_watched is not None:
+        threading.Thread(
+            target=_process_watch_loop, args=(get_watched, get_status), daemon=True
+        ).start()
     print("[telegram] alerts + command bot started")
