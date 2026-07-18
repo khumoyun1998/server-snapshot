@@ -9,15 +9,26 @@ import CpuCoreGrid from "@/components/dashboard/CpuCoreGrid";
 import HistoryCharts from "@/components/dashboard/HistoryCharts";
 import WatchedPanel from "@/components/dashboard/WatchedPanel";
 import { formatBytes } from "@/lib/mockServerData";
-import { fetchMetrics, type MetricsResult } from "@/lib/serverApi";
+import {
+  fetchMetrics,
+  fetchServers,
+  type MetricsResult,
+  type ServerEntry,
+} from "@/lib/serverApi";
 
 const Index = () => {
   const [result, setResult] = useState<MetricsResult | null>(null);
+  const [servers, setServers] = useState<ServerEntry[]>([]);
+  const [base, setBase] = useState("");
+
+  useEffect(() => {
+    fetchServers().then(setServers);
+  }, []);
 
   const refresh = useCallback(async () => {
-    const r = await fetchMetrics();
+    const r = await fetchMetrics(base);
     setResult(r);
-  }, []);
+  }, [base]);
 
   useEffect(() => {
     refresh();
@@ -40,7 +51,13 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <HeaderStrip server={server} dataSource={source} />
+      <HeaderStrip
+        server={server}
+        dataSource={source}
+        servers={servers}
+        currentServer={base}
+        onServerChange={setBase}
+      />
 
       <main className="container py-6 space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -75,9 +92,9 @@ const Index = () => {
           )}
         </div>
 
-        <WatchedPanel />
+        <WatchedPanel base={base} />
 
-        <HistoryCharts />
+        <HistoryCharts base={base} />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <CpuCoreGrid coreUsages={cpu.coreUsages} />

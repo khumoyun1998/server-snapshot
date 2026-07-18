@@ -84,6 +84,30 @@ The dashboard also shows all Docker containers with per-container CPU/memory
 when the Docker socket is mounted (see `docker-compose.prod.yml`; remove the
 volume to disable).
 
+Login sessions: with `/var/run/utmp` mounted (see compose), the dashboard
+lists active sessions (user, source IP, terminal, time) and Telegram gets a
+🔵 alert on every new login and ⚪️ when a session closes.
+
+## Multiple servers
+
+The header shows a server selector when `servers.json` lists more than one
+entry. Mount your own file into the frontend container:
+
+```json
+[
+  { "name": "home", "url": "" },
+  { "name": "vps-1", "url": "https://vps1.example.com:8001" }
+]
+```
+
+```yaml
+    volumes:
+      - ./servers.json:/usr/share/nginx/html/servers.json:ro
+```
+
+Each URL must point at a reachable dashboard/agent (CORS is enabled on the
+agent), `""` means the server this dashboard is served from.
+
 ### Telegram Web App via ngrok
 
 To open the dashboard inside Telegram from anywhere (no VPN), expose it over

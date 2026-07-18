@@ -302,6 +302,22 @@ def get_watched_processes():
     ]
 
 
+def get_sessions():
+    """Active login sessions (host /var/run/utmp must be mounted in Docker)."""
+    out = []
+    try:
+        for u in psutil.users():
+            out.append({
+                "user": u.name,
+                "terminal": u.terminal or "",
+                "host": u.host or "local",
+                "since": datetime.datetime.fromtimestamp(u.started).strftime("%Y-%m-%d %H:%M"),
+            })
+    except Exception:
+        pass
+    return out
+
+
 @app.route("/api/watch")
 def watch():
     containers = docker_stats.get_containers()
@@ -309,6 +325,7 @@ def watch():
         "processes": get_watched_processes(),
         "dockerAvailable": containers["available"],
         "containers": containers["containers"],
+        "sessions": get_sessions(),
     })
 
 
@@ -363,7 +380,7 @@ def fallback(e):
     return "Not found", 404
 
 
-telegram_bot.start(get_status_snapshot, get_watched_processes)
+telegram_bot.start(get_status_snapshot, get_watched_processes, get_sessions)
 
 
 if __name__ == "__main__":

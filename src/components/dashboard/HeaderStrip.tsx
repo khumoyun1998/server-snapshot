@@ -1,14 +1,17 @@
 import { Server, Clock, Wifi, WifiOff } from "lucide-react";
 import type { ServerInfo } from "@/lib/mockServerData";
-import type { DataSource } from "@/lib/serverApi";
+import type { DataSource, ServerEntry } from "@/lib/serverApi";
 import { Badge } from "@/components/ui/badge";
 
 interface HeaderStripProps {
   server: ServerInfo;
   dataSource: DataSource;
+  servers?: ServerEntry[];
+  currentServer?: string;
+  onServerChange?: (url: string) => void;
 }
 
-const HeaderStrip = ({ server, dataSource }: HeaderStripProps) => {
+const HeaderStrip = ({ server, dataSource, servers, currentServer, onServerChange }: HeaderStripProps) => {
   const isLive = dataSource === "live";
 
   return (
@@ -18,6 +21,19 @@ const HeaderStrip = ({ server, dataSource }: HeaderStripProps) => {
           <Server className="h-5 w-5 text-primary" />
           <h1 className="text-lg font-semibold text-foreground">{server.hostname}</h1>
         </div>
+        {servers && servers.length > 1 && onServerChange && (
+          <select
+            value={currentServer}
+            onChange={(e) => onServerChange(e.target.value)}
+            className="text-sm font-mono bg-secondary text-secondary-foreground border rounded-md px-2 py-1"
+          >
+            {servers.map((s) => (
+              <option key={s.name} value={s.url}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        )}
         <span className="text-sm text-muted-foreground font-mono">{server.ip}</span>
         <span className="text-sm text-muted-foreground">{server.os}</span>
       </div>

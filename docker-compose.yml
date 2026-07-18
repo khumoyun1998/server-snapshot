@@ -25,6 +25,7 @@ services:
       WATCH_PROCESSES: ${WATCH_PROCESSES:-dockerd,sshd}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/run/utmp:/var/run/utmp:ro
     restart: unless-stopped
 
   ngrok:

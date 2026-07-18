@@ -136,6 +136,33 @@ def _process_watch_loop(get_watched, get_status):
         first = False
 
 
+def _session_watch_loop(get_sessions, get_status):
+    known = None
+    while True:
+        time.sleep(30)
+        try:
+            sessions = get_sessions()
+            host = get_status()["hostname"]
+        except Exception:
+            continue
+        current = {(s["user"], s["terminal"], s["host"], s["since"]) for s in sessions}
+        if known is not None:
+            for user, term, src, since in sorted(current - known):
+                _send(
+                    f"🔵 <b>New login</b> on <b>{host}</b>\n"
+                    f"User: <code>{user}</code>\n"
+                    f"From: <code>{src}</code>\n"
+                    f"Terminal: {term or '—'}\n"
+                    f"At: {since}"
+                )
+            for user, term, src, since in sorted(known - current):
+                _send(
+                    f"⚪️ <b>Session closed</b> on <b>{host}</b>\n"
+                    f"<code>{user}</code> from <code>{src}</code> (logged in {since})"
+                )
+        known = current
+
+
 def _command_loop(get_status):
     offset = 0
     while True:
@@ -164,7 +191,7 @@ def _command_loop(get_status):
                 )
 
 
-def start(get_status, get_watched=None):
+def start(get_status, get_watched=None, get_sessions=None):
     """Start alert + command threads. No-op when token/chat id are missing."""
     if not TOKEN or not CHAT_ID:
         print("[telegram] TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set — disabled")
@@ -174,5 +201,9 @@ def start(get_status, get_watched=None):
     if get_watched is not None:
         threading.Thread(
             target=_process_watch_loop, args=(get_watched, get_status), daemon=True
+        ).start()
+    if get_sessions is not None:
+        threading.Thread(
+            target=_session_watch_loop, args=(get_sessions, get_status), daemon=True
         ).start()
     print("[telegram] alerts + command bot started")

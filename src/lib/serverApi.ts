@@ -61,10 +61,35 @@ export interface ContainerInfo {
   memLimit: number; // MB
 }
 
+export interface SessionInfo {
+  user: string;
+  terminal: string;
+  host: string;
+  since: string;
+}
+
 export interface WatchResponse {
   processes: WatchedProcess[];
   dockerAvailable: boolean;
   containers: ContainerInfo[];
+  sessions?: SessionInfo[];
+}
+
+export interface ServerEntry {
+  name: string;
+  url: string; // "" = same origin
+}
+
+export async function fetchServers(): Promise<ServerEntry[]> {
+  try {
+    const res = await fetch("/servers.json");
+    if (!res.ok) throw new Error();
+    const list: ServerEntry[] = await res.json();
+    if (Array.isArray(list) && list.length > 0) return list;
+  } catch {
+    /* fall through */
+  }
+  return [{ name: "This server", url: "" }];
 }
 
 const API_URL = import.meta.env.VITE_API_URL || "";
@@ -76,6 +101,9 @@ const MOCK_WATCH: WatchResponse = {
     { name: "sshd", count: 2, cpu: 0.0, mem: 0.4, running: true },
     { name: "nginx", count: 0, cpu: 0, mem: 0, running: false },
   ],
+  sessions: [
+    { user: "admin", terminal: "pts/0", host: "192.0.2.10", since: "2026-07-18 09:15" },
+  ],
   dockerAvailable: true,
   containers: [
     { name: "app-web-1", image: "myapp:latest", state: "running", status: "Up 2 hours", cpu: 2.4, memUsed: 128, memLimit: 1900 },
@@ -84,9 +112,9 @@ const MOCK_WATCH: WatchResponse = {
   ],
 };
 
-export async function fetchWatch(): Promise<{ data: WatchResponse; source: DataSource }> {
+export async function fetchWatch(base = ""): Promise<{ data: WatchResponse; source: DataSource }> {
   try {
-    const res = await fetch(`${API_URL}/api/watch`);
+    const res = await fetch(`${base || API_URL}/api/watch`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const contentType = res.headers.get("content-type") || "";
     if (!contentType.includes("application/json")) throw new Error("Not JSON");
@@ -115,9 +143,9 @@ function generateMockHistory(minutes: number): HistoryPoint[] {
   });
 }
 
-export async function fetchHistory(minutes: number): Promise<{ points: HistoryPoint[]; source: DataSource }> {
+export async function fetchHistory(minutes: number, base = ""): Promise<{ points: HistoryPoint[]; source: DataSource }> {
   try {
-    const res = await fetch(`${API_URL}/api/history?minutes=${minutes}`);
+    const res = await fetch(`${base || API_URL}/api/history?minutes=${minutes}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const contentType = res.headers.get("content-type") || "";
     if (!contentType.includes("application/json")) throw new Error("Not JSON");
@@ -128,9 +156,9 @@ export async function fetchHistory(minutes: number): Promise<{ points: HistoryPo
   }
 }
 
-export async function fetchMetrics(): Promise<MetricsResult> {
+export async function fetchMetrics(base = ""): Promise<MetricsResult> {
   try {
-    const res = await fetch(`${API_URL}/api/metrics`);
+    const res = await fetch(`${base || API_URL}/api/metrics`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const contentType = res.headers.get("content-type") || "";
     if (!contentType.includes("application/json")) throw new Error("Not JSON");

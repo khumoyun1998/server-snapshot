@@ -136,14 +136,14 @@ const HistoryChartCard = ({
   </div>
 );
 
-const HistoryCharts = () => {
+const HistoryCharts = ({ base = "" }: { base?: string }) => {
   const [minutes, setMinutes] = useState<number>(60);
   const [points, setPoints] = useState<HistoryPoint[]>([]);
 
   const refresh = useCallback(async () => {
-    const r = await fetchHistory(minutes);
+    const r = await fetchHistory(minutes, base);
     setPoints(r.points);
-  }, [minutes]);
+  }, [minutes, base]);
 
   useEffect(() => {
     refresh();

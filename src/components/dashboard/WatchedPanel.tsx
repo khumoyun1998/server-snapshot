@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Boxes, Activity } from "lucide-react";
+import { Boxes, Activity, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatBytes } from "@/lib/mockServerData";
 import { fetchWatch, type WatchResponse } from "@/lib/serverApi";
@@ -16,13 +16,13 @@ const StatusBadge = ({ ok, label }: { ok: boolean; label: string }) => (
   </span>
 );
 
-const WatchedPanel = () => {
+const WatchedPanel = ({ base = "" }: { base?: string }) => {
   const [data, setData] = useState<WatchResponse | null>(null);
 
   const refresh = useCallback(async () => {
-    const r = await fetchWatch();
+    const r = await fetchWatch(base);
     setData(r.data);
-  }, []);
+  }, [base]);
 
   useEffect(() => {
     refresh();
@@ -31,8 +31,8 @@ const WatchedPanel = () => {
   }, [refresh]);
 
   if (!data) return null;
-  const { processes, dockerAvailable, containers } = data;
-  if (processes.length === 0 && !dockerAvailable) return null;
+  const { processes, dockerAvailable, containers, sessions = [] } = data;
+  if (processes.length === 0 && !dockerAvailable && sessions.length === 0) return null;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -104,6 +104,36 @@ const WatchedPanel = () => {
                   <td className="py-2 font-mono text-right">
                     {c.state === "running" ? formatBytes(c.memUsed) : "—"}
                   </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {sessions.length > 0 && (
+        <div className="bg-card border rounded-md p-4 lg:col-span-2">
+          <div className="flex items-center gap-2 mb-3">
+            <Users className="h-4 w-4 text-primary" />
+            <h3 className="text-sm font-semibold text-foreground">Active Sessions</h3>
+            <span className="text-xs text-muted-foreground ml-auto font-mono">{sessions.length}</span>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-muted-foreground uppercase">
+                <th className="pb-2 font-medium">User</th>
+                <th className="pb-2 font-medium">From</th>
+                <th className="pb-2 font-medium">Terminal</th>
+                <th className="pb-2 font-medium text-right">Since</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sessions.map((s, i) => (
+                <tr key={i} className="border-t">
+                  <td className="py-2 font-mono text-foreground">{s.user}</td>
+                  <td className="py-2 font-mono">{s.host}</td>
+                  <td className="py-2 font-mono text-muted-foreground">{s.terminal || "—"}</td>
+                  <td className="py-2 font-mono text-right text-muted-foreground">{s.since}</td>
                 </tr>
               ))}
             </tbody>
