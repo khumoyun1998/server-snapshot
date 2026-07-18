@@ -24,6 +24,16 @@ services:
       ALERT_DISK: ${ALERT_DISK:-85}
     restart: unless-stopped
 
+  ngrok:
+    image: ngrok/ngrok:latest
+    command: ["http", "frontend:80", "--url", "${NGROK_DOMAIN:-}"]
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
+    depends_on:
+      - frontend
+    restart: unless-stopped
+    profiles: ["ngrok"]
+
 networks:
   default:
     name: server-snapshot

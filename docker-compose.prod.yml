@@ -27,6 +27,19 @@ services:
       ALERT_DISK: ${ALERT_DISK:-85}
     restart: unless-stopped
 
+  # Public HTTPS tunnel for the dashboard (Telegram Web App needs https).
+  # Enabled only with the "ngrok" profile: put COMPOSE_PROFILES=ngrok,
+  # NGROK_AUTHTOKEN and NGROK_DOMAIN into .env next to this file.
+  ngrok:
+    image: ngrok/ngrok:latest
+    command: ["http", "frontend:80", "--url", "${NGROK_DOMAIN:-}"]
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
+    depends_on:
+      - frontend
+    restart: unless-stopped
+    profiles: ["ngrok"]
+
 networks:
   default:
     name: server-snapshot

@@ -51,12 +51,18 @@ def _api(method, payload, timeout=35):
         return json.loads(resp.read().decode())
 
 
+def _dashboard_button():
+    # Telegram Web App buttons (open inside Telegram) require HTTPS;
+    # for plain http (e.g. a ZeroTier address) fall back to a normal link.
+    if DASHBOARD_URL.startswith("https://"):
+        return {"text": "📊 Open dashboard", "web_app": {"url": DASHBOARD_URL}}
+    return {"text": "📊 Open dashboard", "url": DASHBOARD_URL}
+
+
 def _send(text):
     payload = {"chat_id": CHAT_ID, "text": text, "parse_mode": "HTML"}
     if DASHBOARD_URL:
-        payload["reply_markup"] = {
-            "inline_keyboard": [[{"text": "📊 Open dashboard", "url": DASHBOARD_URL}]]
-        }
+        payload["reply_markup"] = {"inline_keyboard": [[_dashboard_button()]]}
     try:
         _api("sendMessage", payload)
     except Exception as e:

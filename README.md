@@ -79,6 +79,24 @@ the compose file:
 | `ALERT_DISK` | percent threshold | 85 |
 | `ALERT_COOLDOWN` | seconds between repeat alerts | 1800 |
 
+### Telegram Web App via ngrok
+
+To open the dashboard inside Telegram from anywhere (no VPN), expose it over
+HTTPS with the bundled ngrok service. Claim your free static domain at
+[dashboard.ngrok.com](https://dashboard.ngrok.com/domains), then add to `.env`:
+
+```env
+COMPOSE_PROFILES=ngrok
+NGROK_AUTHTOKEN=<your token>
+NGROK_DOMAIN=<your-name>.ngrok-free.app
+DASHBOARD_URL=https://<your-name>.ngrok-free.app
+```
+
+`docker compose up -d` then also starts the tunnel; the bot's "Open dashboard"
+button becomes a Telegram Web App (opens in-app). ⚠️ The tunnel makes the
+dashboard publicly reachable to anyone who knows the URL — treat the URL as a
+secret until authentication is added.
+
 ## Tests
 
 ```sh
