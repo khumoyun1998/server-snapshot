@@ -2,7 +2,7 @@ name: Build and Push to Docker Hub
 
 on:
   push:
-    branches: [ "main" ] # Скрипт сработает, когда ты пушишь в main
+    branches: [ "main" ]
 
 jobs:
   build-and-push:
@@ -18,13 +18,19 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and push Docker image
+      - name: Build and push frontend image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          # Замени 'your-docker-username' на свой логин
           tags: hxolmetov/server-snapshot:latest
 
+      - name: Build and push agent image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./server
+          push: true
+          tags: hxolmetov/server-snapshot-agent:latest
+
       - name: Verify build
-        run: echo "Image successfully pushed to Docker Hub!"
+        run: echo "Images successfully pushed to Docker Hub!"

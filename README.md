@@ -1,45 +1,61 @@
-**Use your preferred IDE**
+# Server Snapshot
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+A real-time server monitoring dashboard. A lightweight Python agent (Flask + psutil)
+collects system metrics — CPU, memory, disks, top processes, network — and a React
+dashboard polls it every 2 seconds. If the agent is unreachable, the dashboard falls
+back to mock data and shows a "mock" indicator in the header.
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## Architecture
 
-Follow these steps:
+- **`server/monitor_agent.py`** — Python agent exposing `GET /api/metrics` on port 5050
+- **`src/`** — React + TypeScript + Tailwind (shadcn/ui) dashboard
+- **nginx** — serves the built frontend and proxies `/api` to the agent (Docker setup)
+
+## Run with Docker (recommended)
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone [<YOUR_GIT_URL>](https://github.com/khumoyun1998/server-snapshot.git)
-
-# Step 2: Navigate to the project directory.
-cd server-snapshot
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+docker compose up -d --build
+# open http://localhost
 ```
 
-**Edit a file directly in GitHub**
+This starts two containers: nginx serving the built dashboard on port 80, and the
+monitoring agent. Note: inside a container the agent sees mostly the container's
+view of the system; for accurate host metrics run the agent directly on the host.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Run locally (development)
 
-**Use GitHub Codespaces**
+Frontend:
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+```sh
+npm i
+npm run dev          # http://localhost:8080
+```
 
-## What technologies are used for this project?
+Agent:
 
-This project is built with:
+```sh
+python3 -m venv venvserver
+source venvserver/bin/activate
+pip install -r server/requirements.txt
+python server/monitor_agent.py       # http://localhost:5050
+```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## Tests
+
+```sh
+npm test
+```
+
+## CI/CD
+
+Pushing to `main` triggers a GitHub Actions workflow that builds and pushes both
+Docker images to Docker Hub (`hxolmetov/server-snapshot` and
+`hxolmetov/server-snapshot-agent`). Requires `DOCKER_USERNAME` and
+`DOCKER_PASSWORD` repository secrets.
+
+## Technologies
+
+- Vite 8, TypeScript, React 18
+- shadcn/ui, Tailwind CSS
+- Python 3, Flask, psutil, gunicorn
+- Docker, nginx, GitHub Actions

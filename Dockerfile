@@ -1,11 +1,20 @@
-# Используем легкий образ Nginx
+# Stage 1: build the frontend
+FROM node:22-alpine AS build
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY . .
+RUN npm run build
+
+# Stage 2: serve with nginx
 FROM nginx:alpine
 
-# Копируем всё содержимое твоего репозитория в папку, которую обслуживает Nginx
-COPY . /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/dist /usr/share/nginx/html
 
-# Открываем 80-й порт
 EXPOSE 80
 
-# Запускаем Nginx
 CMD ["nginx", "-g", "daemon off;"]

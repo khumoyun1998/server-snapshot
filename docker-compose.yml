@@ -1,0 +1,22 @@
+services:
+  frontend:
+    build: .
+    image: hxolmetov/server-snapshot:latest
+    ports:
+      - "80:80"
+    depends_on:
+      - agent
+    restart: unless-stopped
+
+  agent:
+    build: ./server
+    image: hxolmetov/server-snapshot-agent:latest
+    # pid: host lets the agent see host processes instead of just the container's.
+    # Note: full host metrics (CPU/mem of the machine itself) are most accurate
+    # when the agent runs directly on the host — the container view is partial.
+    pid: "host"
+    restart: unless-stopped
+
+networks:
+  default:
+    name: server-snapshot

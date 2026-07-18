@@ -1,0 +1,9 @@
+node_modules
+dist
+venvserver
+.git
+.github
+*.log
+.DS_Store
+admin-panel.png
+docker-compose.yml

@@ -113,9 +113,15 @@ def get_mem_info():
 
 def get_disk_info():
     disks = []
+    seen_devices = set()
     for part in psutil.disk_partitions(all=False):
+        # Skip duplicate devices (e.g. Docker bind mounts of /etc/hosts etc.
+        # all point at the same underlying disk)
+        if part.device in seen_devices:
+            continue
         try:
             usage = psutil.disk_usage(part.mountpoint)
+            seen_devices.add(part.device)
             disks.append({
                 "device": part.device,
                 "mountPoint": part.mountpoint,
