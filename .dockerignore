@@ -7,3 +7,5 @@ venvserver
 .DS_Store
 admin-panel.png
 docker-compose.yml
+docker-compose.prod.yml
+deploy.sh

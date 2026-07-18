@@ -11,7 +11,26 @@ back to mock data and shows a "mock" indicator in the header.
 - **`src/`** — React + TypeScript + Tailwind (shadcn/ui) dashboard
 - **nginx** — serves the built frontend and proxies `/api` to the agent (Docker setup)
 
-## Run with Docker (recommended)
+## Run with prebuilt images (no source needed)
+
+Images for `linux/amd64` and `linux/arm64` are published to Docker Hub on every
+push to `main`. On any server, copy [docker-compose.prod.yml](docker-compose.prod.yml)
+and run:
+
+```sh
+DASHBOARD_PORT=8001 docker compose -f docker-compose.prod.yml up -d
+# open http://<server>:8001
+```
+
+Update to the latest version at any time:
+
+```sh
+docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d
+```
+
+`deploy.sh` automates this over SSH (ships the compose file, pulls and restarts).
+
+## Build and run from source
 
 ```sh
 docker compose up -d --build

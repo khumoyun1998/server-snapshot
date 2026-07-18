@@ -1,0 +1,23 @@
+# Production compose — pulls prebuilt images from Docker Hub.
+# No source code needed on the server: copy this file and run
+#   DASHBOARD_PORT=8001 docker compose up -d
+# (or put DASHBOARD_PORT in a .env file next to it; default is 8080)
+
+services:
+  frontend:
+    image: hxolmetov/server-snapshot:latest
+    ports:
+      - "${DASHBOARD_PORT:-8080}:80"
+    depends_on:
+      - agent
+    restart: unless-stopped
+
+  agent:
+    image: hxolmetov/server-snapshot-agent:latest
+    # pid: host lets the agent see host processes instead of just the container's.
+    pid: "host"
+    restart: unless-stopped
+
+networks:
+  default:
+    name: server-snapshot
