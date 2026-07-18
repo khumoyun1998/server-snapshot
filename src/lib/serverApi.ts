@@ -34,7 +34,47 @@ export interface MetricsResult {
   source: DataSource;
 }
 
+export interface HistoryPoint {
+  t: number; // unix seconds
+  cpu: number; // %
+  mem: number; // %
+  disk: number; // %
+  rxRate: number; // KB/s
+  txRate: number; // KB/s
+}
+
 const API_URL = import.meta.env.VITE_API_URL || "";
+
+function generateMockHistory(minutes: number): HistoryPoint[] {
+  const now = Math.floor(Date.now() / 1000);
+  const points = 120;
+  const step = (minutes * 60) / points;
+  return Array.from({ length: points }, (_, i) => {
+    const t = now - Math.round((points - 1 - i) * step);
+    const wave = Math.sin(i / 9) * 12 + Math.sin(i / 23) * 8;
+    return {
+      t,
+      cpu: Math.max(2, Math.min(98, 35 + wave + (Math.random() - 0.5) * 6)),
+      mem: Math.max(5, Math.min(95, 62 + Math.sin(i / 31) * 5 + (Math.random() - 0.5) * 2)),
+      disk: 41,
+      rxRate: Math.max(0, 120 + wave * 14 + (Math.random() - 0.5) * 40),
+      txRate: Math.max(0, 45 + Math.sin(i / 13) * 20 + (Math.random() - 0.5) * 15),
+    };
+  });
+}
+
+export async function fetchHistory(minutes: number): Promise<{ points: HistoryPoint[]; source: DataSource }> {
+  try {
+    const res = await fetch(`${API_URL}/api/history?minutes=${minutes}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const contentType = res.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) throw new Error("Not JSON");
+    const points: HistoryPoint[] = await res.json();
+    return { points, source: "live" };
+  } catch {
+    return { points: generateMockHistory(minutes), source: "mock" };
+  }
+}
 
 export async function fetchMetrics(): Promise<MetricsResult> {
   try {

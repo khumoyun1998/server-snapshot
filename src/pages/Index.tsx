@@ -6,6 +6,7 @@ import ProcessTable from "@/components/dashboard/ProcessTable";
 import SystemInfoPanel from "@/components/dashboard/SystemInfoPanel";
 import DiskTable from "@/components/dashboard/DiskTable";
 import CpuCoreGrid from "@/components/dashboard/CpuCoreGrid";
+import HistoryCharts from "@/components/dashboard/HistoryCharts";
 import { formatBytes } from "@/lib/mockServerData";
 import { fetchMetrics, type MetricsResult } from "@/lib/serverApi";
 
@@ -72,6 +73,8 @@ const Index = () => {
             />
           )}
         </div>
+
+        <HistoryCharts />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <CpuCoreGrid coreUsages={cpu.coreUsages} />

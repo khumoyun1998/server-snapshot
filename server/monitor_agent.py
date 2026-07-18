@@ -17,10 +17,12 @@ Usage:
 
 import socket
 import platform
+import threading
 import time
 import datetime
 import os
-from flask import Flask, jsonify, send_from_directory
+from collections import deque
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
 try:
@@ -33,6 +35,34 @@ app = Flask(__name__, static_folder="dist", static_url_path="")
 CORS(app)
 
 BOOT_TIME = psutil.boot_time()
+
+# ---------- Metrics history (in-memory ring buffer) ----------
+
+HISTORY_INTERVAL = 5                      # seconds between samples
+HISTORY_MAX = 24 * 3600 // HISTORY_INTERVAL   # keep 24 hours
+HISTORY = deque(maxlen=HISTORY_MAX)
+
+
+def _sample_loop():
+    while True:
+        try:
+            mem = psutil.virtual_memory()
+            net = psutil.net_io_counters()
+            disk = psutil.disk_usage("/")
+            HISTORY.append({
+                "t": int(time.time()),
+                "cpu": round(psutil.cpu_percent(interval=None), 1),
+                "mem": round(mem.percent, 1),
+                "disk": round(disk.percent, 1),
+                "rx": net.bytes_recv,
+                "tx": net.bytes_sent,
+            })
+        except Exception:
+            pass
+        time.sleep(HISTORY_INTERVAL)
+
+
+threading.Thread(target=_sample_loop, daemon=True).start()
 
 
 def get_uptime():
@@ -214,6 +244,41 @@ def metrics():
         "processesByMem": get_top_processes_by_mem(),
         "network": get_network_info(),
     })
+
+
+@app.route("/api/history")
+def history():
+    try:
+        minutes = min(max(int(request.args.get("minutes", 60)), 1), 24 * 60)
+    except ValueError:
+        minutes = 60
+    cutoff = time.time() - minutes * 60
+    samples = [s for s in HISTORY if s["t"] >= cutoff]
+
+    # Downsample to at most ~180 points so responses stay small
+    step = max(1, len(samples) // 180)
+    samples = samples[::step]
+
+    # Convert cumulative rx/tx counters to KB/s rates between kept samples
+    points = []
+    prev = None
+    for s in samples:
+        rx_rate = tx_rate = 0.0
+        if prev is not None:
+            dt = s["t"] - prev["t"]
+            if dt > 0:
+                rx_rate = max(0.0, (s["rx"] - prev["rx"]) / dt / 1024)
+                tx_rate = max(0.0, (s["tx"] - prev["tx"]) / dt / 1024)
+        points.append({
+            "t": s["t"],
+            "cpu": s["cpu"],
+            "mem": s["mem"],
+            "disk": s["disk"],
+            "rxRate": round(rx_rate, 1),
+            "txRate": round(tx_rate, 1),
+        })
+        prev = s
+    return jsonify(points)
 
 
 # ---------- Serve Frontend ----------
