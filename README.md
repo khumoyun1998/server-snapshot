@@ -88,6 +88,50 @@ Login sessions: with `/var/run/utmp` mounted (see compose), the dashboard
 lists active sessions (user, source IP, terminal, time) and Telegram gets a
 🔵 alert on every new login and ⚪️ when a session closes.
 
+## Split deployment: agents + central monitor
+
+To be alerted when a whole machine goes down, the alerter must run somewhere
+else — a dead box can't page you. So agents run on the machines you watch, and
+a **central monitor** runs on an always-on host (e.g. a VPS) that polls them.
+
+```
+ monitored machine(s)          always-on VPS
+ ┌───────────────┐             ┌────────────────────────┐
+ │ agent :8001   │◀── poll ────│ monitor  (Telegram bot)│
+ │ /api/metrics  │             │ dashboard (nginx)      │
+ └───────────────┘             └────────────────────────┘
+```
+
+**On each monitored machine** (`docker-compose.agent.yml`) — agent only, no
+Telegram (one bot token can only be polled from one place):
+
+```sh
+AGENT_PORT=8001 docker compose -f docker-compose.agent.yml up -d
+```
+
+**On the VPS** (`docker-compose.monitor.yml`) — dashboard + monitor. Put the
+Telegram credentials and the agent list in `.env`:
+
+```env
+DASHBOARD_PORT=80
+MONITOR_AGENTS=home=http://10.0.0.10:8001,vps2=http://10.0.0.11:8001
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_CHAT_ID=...
+DASHBOARD_URL=https://your-domain
+```
+
+```sh
+cp servers.example.json servers.json   # edit to taste
+docker compose -f docker-compose.monitor.yml up -d
+```
+
+The monitor sends 🔴 **Server DOWN** when an agent stops responding (after
+`MONITOR_FAILS` polls) and 🟢 **Server UP** with the downtime when it returns,
+plus the same threshold / watched-process / new-login alerts gathered remotely.
+`/status` summarises every agent. The monitored machines reach the VPS over
+whatever private network you choose (ZeroTier works well); with no token the
+monitor prints alerts to stdout (dry-run).
+
 ## Multiple servers
 
 The header shows a server selector when `servers.json` lists more than one

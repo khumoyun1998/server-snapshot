@@ -1,0 +1,37 @@
+# Central monitor + dashboard — runs on an always-on box (e.g. a VPS),
+# separate from the machines it watches, so it can report them as DOWN.
+# Copy this file + a .env to the VPS and run:
+#   docker compose -f docker-compose.monitor.yml up -d
+#
+# .env example:
+#   DASHBOARD_PORT=80
+#   MONITOR_AGENTS=home=http://10.0.0.10:8001
+#   TELEGRAM_BOT_TOKEN=...
+#   TELEGRAM_CHAT_ID=...
+#   DASHBOARD_URL=https://your-domain
+# Point the dashboard at the same agents via servers.json (see README).
+
+services:
+  dashboard:
+    image: hxolmetov/server-snapshot:latest
+    ports:
+      - "${DASHBOARD_PORT:-80}:80"
+    volumes:
+      # optional: list the agents so the header shows a server selector
+      - ./servers.json:/usr/share/nginx/html/servers.json:ro
+    restart: unless-stopped
+
+  monitor:
+    image: hxolmetov/server-snapshot-agent:latest
+    command: ["python", "monitor_service.py"]
+    environment:
+      MONITOR_AGENTS: ${MONITOR_AGENTS:-}
+      MONITOR_INTERVAL: ${MONITOR_INTERVAL:-30}
+      MONITOR_FAILS: ${MONITOR_FAILS:-2}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      DASHBOARD_URL: ${DASHBOARD_URL:-}
+      ALERT_CPU: ${ALERT_CPU:-90}
+      ALERT_MEM: ${ALERT_MEM:-90}
+      ALERT_DISK: ${ALERT_DISK:-85}
+    restart: unless-stopped
