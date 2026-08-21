@@ -2,11 +2,11 @@
 
 A lightweight, self-hostable server monitoring system: a small Python **agent**
 collects system metrics on each machine, a React **dashboard** shows them live,
-and — when you run the separate **central monitor** — you get Telegram alerts
-including *whole-machine down* detection that a box can never report about itself.
+and a separate **central monitor** sends Telegram alerts — including
+*whole-machine down* detection that a box can never report about itself.
 
-No SaaS, no account, no database. Prebuilt multi-arch images (amd64 + arm64),
-configured entirely with environment variables.
+Prebuilt multi-arch images (amd64 + arm64), configured entirely with environment
+variables. No account, no database.
 
 ---
 
@@ -16,75 +16,40 @@ configured entirely with environment variables.
   top processes by CPU/memory.
 - **History charts** — CPU / memory / network over 15m · 1h · 6h · 24h.
 - **Docker panel** — every container with per-container CPU and memory.
-- **Watched processes** — named host processes (e.g. `dockerd`, `sshd`) with a
-  status badge; alert when one disappears.
+- **Watched processes** — named host processes with a status badge; alert when
+  one disappears.
 - **Login sessions** — who is logged in, from which IP, since when; alert on each
   new login.
-- **Telegram alerts** — thresholds (CPU/mem/disk), process down, new login, and
-  **server DOWN/UP** with downtime. `/status` summarises every server on demand.
-  Alerts can broadcast to a **channel** for a whole team.
+- **Telegram alerts** — CPU/mem/disk thresholds, process down, new login, service
+  health, and **server DOWN/UP** with downtime. `/status` shows every server on
+  demand; alerts can broadcast to a channel or group for a whole team.
 - **Multi-server** — one dashboard and one bot watch many agents.
-- **Graceful fallback** — if an agent is unreachable the dashboard shows mock data
-  with a "mock" badge instead of breaking.
 
 ---
 
 ## Architecture
 
 ```
-        ┌─────────────────────────────┐        ┌──────────────────────────────┐
-        │  MONITORED MACHINE (agent)  │        │   ALWAYS-ON HOST (monitor)   │
-        │                             │  poll  │                              │
-        │  monitor_agent.py  :5050    │◀───────│  monitor_service.py          │
-        │   /api/metrics              │  (HTTP │   → Telegram alerts + /status│
-        │   /api/history              │   over │  dashboard (nginx, proxies   │
-        │   /api/watch                │   VPN) │   /api to the agent)         │
-        └─────────────────────────────┘        └──────────────────────────────┘
+  MONITORED MACHINE (agent)              ALWAYS-ON HOST (monitor)
+  ┌──────────────────────┐   poll over  ┌────────────────────────────┐
+  │ agent  :5050          │◀─ private ───│ monitor → Telegram alerts  │
+  │  /api/metrics         │    network   │ dashboard (nginx)          │
+  │  /api/history /watch  │              └────────────────────────────┘
+  └──────────────────────┘
 ```
 
-**Components**
+Run everything on one machine (**all-in-one**), or split the agent onto each
+monitored machine and the monitor onto an always-on host so it can report a
+machine as **DOWN** — an alerter running on the dead box can't do that itself.
 
-| Path | What it is |
-|---|---|
-| `server/monitor_agent.py` | Flask + psutil agent; serves the metrics API (and the built dashboard when run all-in-one) |
-| `server/docker_stats.py` | reads the Docker socket for container stats |
-| `server/telegram_bot.py` | Telegram transport: alert sending, `/status` command loop |
-| `server/monitor_service.py` | central monitor — polls remote agents, down-detection, alerts, `/status` |
-| `src/` | React + TypeScript + Tailwind (shadcn/ui) dashboard |
-| `nginx.conf` | all-in-one nginx: serves the dashboard, proxies `/api` to the local agent |
-| `nginx.monitor.conf` | monitor-host nginx: proxies `/api` to a *remote* agent (works over https) |
-
-**Agent API**
-
-| Endpoint | Returns |
-|---|---|
-| `GET /api/metrics` | server info, CPU, memory, disks, processes, network |
-| `GET /api/history?minutes=N` | downsampled CPU/mem/disk % and network KB/s for the last N minutes (24h in-memory ring buffer) |
-| `GET /api/watch` | watched processes, Docker containers, login sessions |
-
-**Images** (built for `linux/amd64` + `linux/arm64` on every push to `main`):
-`hxolmetov/server-snapshot` (dashboard) and `hxolmetov/server-snapshot-agent`
-(agent + monitor — same image, different command).
+Prebuilt images: `hxolmetov/server-snapshot` (dashboard) and
+`hxolmetov/server-snapshot-agent` (agent + monitor, same image, different command).
 
 ---
 
-## Which deployment do you want?
+## A. All-in-one (one machine)
 
-| Goal | Use |
-|---|---|
-| Watch **one machine**, dashboard on that machine | **A. All-in-one** |
-| Be alerted when a **machine goes down** (the real use case) | **B. Split: agent + central monitor** |
-| One dashboard/bot for **several machines** | B + [Multiple servers](#multiple-servers) |
-
-> **Why split?** An alerter running on the monitored box dies with it, so it can
-> never tell you the box is down. The central monitor runs elsewhere (a cheap
-> always-on VPS) and reports a machine as DOWN when its agent stops answering.
-
----
-
-## A. All-in-one (single machine)
-
-Dashboard + agent on one host. Copy `docker-compose.prod.yml` and:
+Copy `docker-compose.prod.yml` and run:
 
 ```sh
 DASHBOARD_PORT=8001 docker compose -f docker-compose.prod.yml up -d
@@ -97,75 +62,72 @@ Update any time:
 docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d
 ```
 
-`deploy.sh` automates this over SSH. To build from source instead of pulling:
-`docker compose up -d --build`.
+To build from source instead of pulling: `docker compose up -d --build`.
 
 ---
 
-## B. Split: agents + central monitor
+## B. Split: agent + central monitor
 
-**On each monitored machine** — agent only (`docker-compose.agent.yml`). No
-Telegram here: a bot token may be long-polled from only one place, and that
-place is the monitor.
+**On each monitored machine** — agent only (`docker-compose.agent.yml`):
 
 ```sh
 AGENT_PORT=8001 docker compose -f docker-compose.agent.yml up -d
 ```
 
-The agent must be reachable by the monitor over a private network — [ZeroTier](https://zerotier.com)
-or a WireGuard/Tailscale mesh works well and needs no public port.
+The agent must be reachable by the monitor over a private network — [ZeroTier](https://zerotier.com),
+WireGuard or Tailscale works well and needs no public port. (No Telegram on the
+agent: a bot token can be polled from only one place — the monitor.)
 
-**On the always-on host** (`docker-compose.monitor.yml`) — dashboard + monitor
-(+ optional ngrok). Create `.env` next to the compose file:
+**On the always-on host** — dashboard + monitor (`docker-compose.monitor.yml`).
+Create a `.env` next to the compose file:
 
 ```env
-MONITOR_AGENTS=home=http://10.0.0.10:8001
+MONITOR_AGENTS=srv1=http://10.0.0.10:8001
 TELEGRAM_BOT_TOKEN=123456:ABC...
 TELEGRAM_CHAT_ID=<your user id>
 DASHBOARD_URL=https://your-domain
 ```
 
 ```sh
-cp servers.example.json servers.json    # see "Multiple servers"
+cp servers.example.json servers.json
 docker compose -f docker-compose.monitor.yml up -d
 ```
 
 The monitor sends 🔴 **Server DOWN** after `MONITOR_FAILS` failed polls and 🟢
-**Server UP** with the downtime when it returns, plus threshold / watched-process
-/ new-login alerts gathered remotely. `nginx.monitor.conf` proxies the dashboard's
-`/api` to the agent so the dashboard works over https with no mixed-content — set
+**Server UP** (with downtime) when it returns, plus threshold, watched-process and
+new-login alerts gathered remotely. `nginx.monitor.conf` proxies the dashboard's
+`/api` to the agent so it works over https with no mixed-content — set the
 `servers.json` url to `""` to use that proxy.
 
-**Service health checks** — set `HTTP_CHECKS=hisay=http://10.0.0.10:8000,api=https://…`
-to have the monitor GET each URL every cycle and alert on non-2xx/3xx or timeout
-(a service returning 200 is a stronger signal than a process merely existing).
+**Service health checks** — `HTTP_CHECKS=web=http://10.0.0.10:8000,api=https://…`
+makes the monitor GET each URL every cycle and alert on 5xx / unreachable /
+timeout (a service that answers is stronger proof than a process merely existing).
 
-**Dead-man's switch** — the monitor can't report *its own* death. Create a check at
-[healthchecks.io](https://healthchecks.io) (free), put its ping URL in
-`HEALTHCHECK_URL`, and the monitor pings it every cycle; if the monitor or its host
-dies the pings stop and healthchecks.io alerts you through its own channels.
+**Dead-man's switch** — the monitor can't report its own death. Create a free
+check at [healthchecks.io](https://healthchecks.io), put its ping URL in
+`HEALTHCHECK_URL`, and the monitor pings it every cycle; if the monitor or its
+host dies the pings stop and healthchecks.io alerts you.
 
 ---
 
 ## Multiple servers
 
-List every agent in `MONITOR_AGENTS` (the monitor) and in `servers.json` (the
-dashboard's server selector):
+List every agent in `MONITOR_AGENTS` and in `servers.json`:
 
 ```env
-MONITOR_AGENTS=home=http://10.0.0.10:8001,vps2=http://10.0.0.11:8001
+MONITOR_AGENTS=srv1=http://10.0.0.10:8001,srv2=http://10.0.0.11:8001
 ```
 
 ```json
 [
-  { "name": "home", "url": "" },
-  { "name": "vps2", "url": "https://vps2.example.com" }
+  { "name": "srv1", "url": "" },
+  { "name": "srv2", "url": "https://srv2.example.com" }
 ]
 ```
 
-`url: ""` uses the monitor host's own `/api` proxy; a full URL points the browser
-directly at another dashboard/agent (CORS is enabled on the agent). More than one
-entry shows a dropdown in the header.
+`url: ""` goes through the monitor host's own `/api` proxy; a full URL points the
+browser directly at another agent (CORS is enabled). More than one entry shows a
+dropdown in the header.
 
 ---
 
@@ -175,28 +137,21 @@ entry shows a dropdown in the header.
 2. Get your numeric **chat id** from [@userinfobot](https://t.me/userinfobot).
 3. Put `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in the monitor's `.env`.
 
-**Commands** (from any allowed user, in a private chat with the bot):
-`/status` — every server's CPU/mem/disk at a glance; `/help`.
+`/status` (in a private chat with the bot) shows every server's CPU/mem/disk.
 
-**Team alerts → a channel.** To broadcast alerts to a group instead of one
-person, create a Telegram channel, add the bot as an **admin**, get the channel
-id (e.g. `-1001234567890`), and set:
+**Team alerts → a channel or group.** Add the bot to a channel/group, get its id
+(e.g. `-1001234567890`), and set `TELEGRAM_ALERT_CHAT` to it; alerts then reach
+everyone there. For a Topics-enabled group, `TELEGRAM_ALERT_THREAD=<topic id>`
+posts into one topic. Add the group id to `TELEGRAM_ALLOWED_IDS` so `/status`
+works inside the group.
 
-```env
-TELEGRAM_ALERT_CHAT=-1001234567890      # alerts go here (channel/group)
-TELEGRAM_ALLOWED_IDS=111111,222222      # who may run /status (optional; default = owner)
-```
-
-Alerts then post to the channel (everyone subscribed sees them); commands still
-come from allowed users privately.
-
-**In-Telegram dashboard (Web App).** Expose the dashboard over https with the
-bundled ngrok service so the "Open dashboard" button opens inside Telegram:
+**In-Telegram dashboard.** Expose the dashboard over https with the bundled ngrok
+service so the "Open dashboard" button opens inside Telegram:
 
 ```env
 COMPOSE_PROFILES=ngrok
 NGROK_AUTHTOKEN=<token>
-NGROK_DOMAIN=<name>.ngrok-free.app     # a free static domain
+NGROK_DOMAIN=<name>.ngrok-free.app
 DASHBOARD_URL=https://<name>.ngrok-free.app
 ```
 
@@ -204,7 +159,7 @@ DASHBOARD_URL=https://<name>.ngrok-free.app
 
 ## Configuration reference
 
-**Agent** (`docker-compose.agent.yml` / `docker-compose.prod.yml`)
+**Agent**
 
 | Variable | Meaning | Default |
 |---|---|---|
@@ -214,7 +169,7 @@ DASHBOARD_URL=https://<name>.ngrok-free.app
 Mount `/var/run/docker.sock:ro` for the container panel and `/var/run/utmp:ro`
 for login sessions (both already in the compose files).
 
-**Monitor** (`docker-compose.monitor.yml`)
+**Monitor**
 
 | Variable | Meaning | Default |
 |---|---|---|
@@ -223,59 +178,35 @@ for login sessions (both already in the compose files).
 | `MONITOR_FAILS` | failed polls before DOWN | 2 |
 | `TELEGRAM_BOT_TOKEN` | bot token (empty = Telegram off) | — |
 | `TELEGRAM_CHAT_ID` | owner chat (alerts + commands) | — |
-| `TELEGRAM_ALERT_CHAT` | override alert target (channel/group id) | = chat id |
-| `TELEGRAM_ALERT_THREAD` | forum topic id in the alert group (post into one topic) | — |
-| `TELEGRAM_ALLOWED_IDS` | ids allowed to run commands (add the group id to allow `/status` inside it) | = chat id |
+| `TELEGRAM_ALERT_CHAT` | alert target — a channel/group id | = chat id |
+| `TELEGRAM_ALERT_THREAD` | forum topic id in the alert group | — |
+| `TELEGRAM_ALLOWED_IDS` | ids allowed to run commands | = chat id |
 | `DASHBOARD_URL` | link for the "Open dashboard" button | — |
 | `ALERT_CPU` / `ALERT_MEM` | percent thresholds | 90 |
 | `ALERT_DISK` | percent threshold | 85 |
 | `ALERT_COOLDOWN` | seconds between repeat alerts | 1800 |
-| `HTTP_CHECKS` | `name=url` comma list of endpoints to health-check (alert on non-2xx/3xx) | — |
-| `HEALTHCHECK_URL` | dead-man's switch: pinged every cycle so an external watchdog alerts if the monitor itself dies | — |
+| `HTTP_CHECKS` | `name=url` endpoints to health-check | — |
+| `HEALTHCHECK_URL` | dead-man's switch ping URL | — |
 | `NGROK_AUTHTOKEN` / `NGROK_DOMAIN` | with `COMPOSE_PROFILES=ngrok` | — |
 
-With no bot token the monitor runs in **dry-run**: alerts print to stdout.
+With no bot token the monitor runs in **dry-run** and prints alerts to stdout.
+
+For a stable deployment, pin the images to a released version (e.g. `:1.9.0`)
+instead of `:latest`.
 
 ---
 
 ## Security
 
 - The dashboard and API have **no authentication** — anyone who can reach the URL
-  can read metrics. Keep it on a private network, or treat the ngrok URL as a
-  secret, until you add auth (nginx basic-auth or ngrok's built-in OAuth).
+  can read metrics. Keep it on a private network or treat the public URL as a
+  secret.
 - The agent reads the Docker socket **read-only** (list + stats, no control).
-- Secrets live only in `.env` files next to the compose files (git-ignored);
-  never bake them into images.
+- Secrets live only in `.env` files (git-ignored); never bake them into images.
 
 ---
-
-## Development
-
-```sh
-npm i && npm run dev          # dashboard at http://localhost:8080
-npm test                      # vitest
-npm run build                 # production build
-
-python3 -m venv venvserver && source venvserver/bin/activate
-pip install -r server/requirements.txt
-python server/monitor_agent.py    # agent at http://localhost:5050
-```
-
-**CI/CD** — pushing to `main` builds and pushes both multi-arch images to Docker
-Hub as `:latest` + `:<sha>` (needs `DOCKER_USERNAME` / `DOCKER_PASSWORD` repo
-secrets). Add `[skip ci]` to a commit message for docs-only changes.
-
-**Releases** — pushing a version tag builds pinnable versioned images:
-
-```sh
-git tag -a v1.9.0 -m "..."  &&  git push origin v1.9.0
-# → hxolmetov/server-snapshot:1.9.0  and  ...-agent:1.9.0
-```
-
-For a stable deployment, pin the images to a version (e.g. `:1.9.0`) instead of
-`:latest`. See the tag list for the project's milestone history.
 
 ## Tech stack
 
 Vite · React 18 · TypeScript · Tailwind / shadcn-ui · Recharts — Python 3 · Flask
-· psutil · gunicorn — Docker · nginx · GitHub Actions.
+· psutil · gunicorn — Docker · nginx.
