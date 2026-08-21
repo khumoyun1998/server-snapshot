@@ -262,8 +262,18 @@ python server/monitor_agent.py    # agent at http://localhost:5050
 ```
 
 **CI/CD** — pushing to `main` builds and pushes both multi-arch images to Docker
-Hub (needs `DOCKER_USERNAME` / `DOCKER_PASSWORD` repo secrets). Add `[skip ci]`
-to a commit message for docs-only changes.
+Hub as `:latest` + `:<sha>` (needs `DOCKER_USERNAME` / `DOCKER_PASSWORD` repo
+secrets). Add `[skip ci]` to a commit message for docs-only changes.
+
+**Releases** — pushing a version tag builds pinnable versioned images:
+
+```sh
+git tag -a v1.9.0 -m "..."  &&  git push origin v1.9.0
+# → hxolmetov/server-snapshot:1.9.0  and  ...-agent:1.9.0
+```
+
+For a stable deployment, pin the images to a version (e.g. `:1.9.0`) instead of
+`:latest`. See the tag list for the project's milestone history.
 
 ## Tech stack
 

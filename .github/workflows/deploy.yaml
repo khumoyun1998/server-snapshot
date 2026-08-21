@@ -3,6 +3,7 @@ name: Build and Push to Docker Hub
 on:
   push:
     branches: [ "main" ]
+    tags: [ "v*" ]        # a version tag (e.g. v1.9.0) builds pinnable images
 
 jobs:
   build-and-push:
@@ -24,15 +25,26 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
+      # main push → :latest + :<sha>   ·   tag vX.Y.Z → :X.Y.Z
+      - name: Compute image tags
+        id: tags
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            V="${GITHUB_REF_NAME#v}"
+            echo "frontend=hxolmetov/server-snapshot:${V}" >> "$GITHUB_OUTPUT"
+            echo "agent=hxolmetov/server-snapshot-agent:${V}" >> "$GITHUB_OUTPUT"
+          else
+            echo "frontend=hxolmetov/server-snapshot:latest,hxolmetov/server-snapshot:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+            echo "agent=hxolmetov/server-snapshot-agent:latest,hxolmetov/server-snapshot-agent:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build and push frontend image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
           platforms: linux/amd64,linux/arm64
-          tags: |
-            hxolmetov/server-snapshot:latest
-            hxolmetov/server-snapshot:${{ github.sha }}
+          tags: ${{ steps.tags.outputs.frontend }}
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,scope=frontend,mode=max
 
@@ -42,9 +54,7 @@ jobs:
           context: ./server
           push: true
           platforms: linux/amd64,linux/arm64
-          tags: |
-            hxolmetov/server-snapshot-agent:latest
-            hxolmetov/server-snapshot-agent:${{ github.sha }}
+          tags: ${{ steps.tags.outputs.agent }}
           cache-from: type=gha,scope=agent
           cache-to: type=gha,scope=agent,mode=max
 
