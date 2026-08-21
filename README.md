@@ -136,6 +136,15 @@ The monitor sends 🔴 **Server DOWN** after `MONITOR_FAILS` failed polls and �
 `/api` to the agent so the dashboard works over https with no mixed-content — set
 `servers.json` url to `""` to use that proxy.
 
+**Service health checks** — set `HTTP_CHECKS=hisay=http://10.0.0.10:8000,api=https://…`
+to have the monitor GET each URL every cycle and alert on non-2xx/3xx or timeout
+(a service returning 200 is a stronger signal than a process merely existing).
+
+**Dead-man's switch** — the monitor can't report *its own* death. Create a check at
+[healthchecks.io](https://healthchecks.io) (free), put its ping URL in
+`HEALTHCHECK_URL`, and the monitor pings it every cycle; if the monitor or its host
+dies the pings stop and healthchecks.io alerts you through its own channels.
+
 ---
 
 ## Multiple servers
@@ -221,6 +230,8 @@ for login sessions (both already in the compose files).
 | `ALERT_CPU` / `ALERT_MEM` | percent thresholds | 90 |
 | `ALERT_DISK` | percent threshold | 85 |
 | `ALERT_COOLDOWN` | seconds between repeat alerts | 1800 |
+| `HTTP_CHECKS` | `name=url` comma list of endpoints to health-check (alert on non-2xx/3xx) | — |
+| `HEALTHCHECK_URL` | dead-man's switch: pinged every cycle so an external watchdog alerts if the monitor itself dies | — |
 | `NGROK_AUTHTOKEN` / `NGROK_DOMAIN` | with `COMPOSE_PROFILES=ngrok` | — |
 
 With no bot token the monitor runs in **dry-run**: alerts print to stdout.

@@ -43,6 +43,25 @@ COOLDOWN = int(os.environ.get("ALERT_COOLDOWN", 1800))
 HYSTERESIS = 5.0
 METRIC_NAMES = {"cpu": "CPU", "mem": "Memory", "disk": "Disk"}
 
+# Dead-man's switch: ping this URL every cycle so an external watchdog
+# (e.g. healthchecks.io) alerts if THIS monitor / its host dies.
+HEALTHCHECK_URL = os.environ.get("HEALTHCHECK_URL", "").strip()
+
+
+def _parse_http_checks():
+    checks = []
+    for chunk in os.environ.get("HTTP_CHECKS", "").split(","):
+        chunk = chunk.strip()
+        if not chunk or "=" not in chunk:
+            continue
+        name, url = chunk.split("=", 1)
+        checks.append({"name": name.strip(), "url": url.strip()})
+    return checks
+
+
+HTTP_CHECKS = _parse_http_checks()
+_check_state = {c["name"]: {"url": c["url"], "up": None, "fails": 0} for c in HTTP_CHECKS}
+
 
 def _parse_agents():
     agents = []
@@ -173,10 +192,46 @@ def _poll_agent(name, st):
             notify(f"🔴 <b>Server DOWN</b> — <b>{name}</b> is not responding\n{st['url']}\n({type(e).__name__})")
 
 
+def _http_check_one(name, st):
+    """GET a service URL; alert on non-2xx/3xx or unreachable (and recovery)."""
+    try:
+        req = urllib.request.Request(
+            st["url"], headers={"User-Agent": "server-snapshot-monitor"}
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            code = resp.status
+        if not (200 <= code < 400):
+            raise RuntimeError(f"HTTP {code}")
+        st["fails"] = 0
+        if st["up"] is False:
+            notify(f"🟢 <b>Service UP</b> — <b>{name}</b> is responding again")
+        st["up"] = True
+    except Exception as e:
+        st["fails"] += 1
+        if st["up"] is not False and st["fails"] >= FAILS_TO_DOWN:
+            st["up"] = False
+            notify(
+                f"🔴 <b>Service DOWN</b> — <b>{name}</b>\n{st['url']}\n"
+                f"({getattr(e, 'code', type(e).__name__)})"
+            )
+
+
+def _ping_healthcheck():
+    if not HEALTHCHECK_URL:
+        return
+    try:
+        urllib.request.urlopen(HEALTHCHECK_URL, timeout=10).read()
+    except Exception:
+        pass  # a missed ping is exactly what the external watchdog reacts to
+
+
 def _poll_loop():
     while True:
         for name, st in _state.items():
             _poll_agent(name, st)
+        for name, st in _check_state.items():
+            _http_check_one(name, st)
+        _ping_healthcheck()
         time.sleep(INTERVAL)
 
 
@@ -194,6 +249,12 @@ def _status_text():
         else:
             down_for = _fmt_downtime(time.time() - st["down_since"])
             lines.append(f"🔴 <b>{name}</b> — DOWN ({down_for})")
+    if _check_state:
+        lines.append("")
+        lines.append("🌐 <b>Services</b>")
+        for name, st in _check_state.items():
+            icon = "⏳" if st["up"] is None else ("🟢" if st["up"] else "🔴")
+            lines.append(f"{icon} <b>{name}</b>")
     return "\n".join(lines)
 
 
@@ -226,10 +287,14 @@ def _command_loop():
 
 
 def main():
-    if not AGENTS:
-        print("[monitor] MONITOR_AGENTS not set — nothing to watch, exiting")
+    if not AGENTS and not HTTP_CHECKS:
+        print("[monitor] nothing to watch (MONITOR_AGENTS / HTTP_CHECKS empty), exiting")
         return
     print(f"[monitor] watching {len(AGENTS)} agent(s): {', '.join(a['name'] for a in AGENTS)}")
+    if HTTP_CHECKS:
+        print(f"[monitor] http checks: {', '.join(c['name'] for c in HTTP_CHECKS)}")
+    if HEALTHCHECK_URL:
+        print("[monitor] dead-man's switch enabled (pinging healthcheck url)")
     if not telegram_bot.TOKEN:
         print("[monitor] no TELEGRAM_BOT_TOKEN — dry-run, alerts print to stdout")
     threading.Thread(target=_poll_loop, daemon=True).start()

@@ -41,6 +41,8 @@ services:
       ALERT_CPU: ${ALERT_CPU:-90}
       ALERT_MEM: ${ALERT_MEM:-90}
       ALERT_DISK: ${ALERT_DISK:-85}
+      HTTP_CHECKS: ${HTTP_CHECKS:-}
+      HEALTHCHECK_URL: ${HEALTHCHECK_URL:-}
     restart: unless-stopped
 
   # Optional https tunnel for the dashboard (Telegram Web App). Profile "ngrok".
