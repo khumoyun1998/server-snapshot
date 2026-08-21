@@ -28,6 +28,7 @@ import json
 import os
 import threading
 import time
+import urllib.error
 import urllib.request
 
 import telegram_bot  # reused transport (_api, _send, TOKEN)
@@ -193,26 +194,33 @@ def _poll_agent(name, st):
 
 
 def _http_check_one(name, st):
-    """GET a service URL; alert on non-2xx/3xx or unreachable (and recovery)."""
+    """GET a service URL. UP if the server answers at all — even 4xx means it is
+    alive but protected (e.g. a login-gated panel). DOWN only on 5xx, a refused
+    connection, or a timeout."""
+    reason = None
     try:
         req = urllib.request.Request(
             st["url"], headers={"User-Agent": "server-snapshot-monitor"}
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
             code = resp.status
-        if not (200 <= code < 400):
-            raise RuntimeError(f"HTTP {code}")
+    except urllib.error.HTTPError as he:
+        code = he.code  # the server did answer, just with an error status
+    except Exception as e:
+        code = None
+        reason = type(e).__name__
+    if code is not None and code < 500:
         st["fails"] = 0
         if st["up"] is False:
             notify(f"🟢 <b>Service UP</b> — <b>{name}</b> is responding again")
         st["up"] = True
-    except Exception as e:
+    else:
         st["fails"] += 1
         if st["up"] is not False and st["fails"] >= FAILS_TO_DOWN:
             st["up"] = False
             notify(
                 f"🔴 <b>Service DOWN</b> — <b>{name}</b>\n{st['url']}\n"
-                f"({getattr(e, 'code', type(e).__name__)})"
+                f"({reason or f'HTTP {code}'})"
             )
 
 
