@@ -1,15 +1,19 @@
 # Central monitor + dashboard — runs on an always-on box (e.g. a VPS),
 # separate from the machines it watches, so it can report them as DOWN.
-# Copy this file + a .env to the VPS and run:
+# Copy this file + a .env (+ nginx.monitor.conf + servers.json) to the VPS:
 #   docker compose -f docker-compose.monitor.yml up -d
 #
 # .env example:
-#   DASHBOARD_PORT=80
 #   MONITOR_AGENTS=home=http://10.0.0.10:8001
 #   TELEGRAM_BOT_TOKEN=...
 #   TELEGRAM_CHAT_ID=...
 #   DASHBOARD_URL=https://your-domain
-# Point the dashboard at the same agents via servers.json (see README).
+#   COMPOSE_PROFILES=ngrok        # to also expose the dashboard over https
+#   NGROK_AUTHTOKEN=...           # (needs NGROK_DOMAIN too)
+#   NGROK_DOMAIN=your.ngrok-free.app
+#
+# nginx.monitor.conf proxies /api to the monitored agent so the dashboard
+# works over https with no mixed-content; servers.json should use url "".
 
 services:
   dashboard:
@@ -17,7 +21,7 @@ services:
     ports:
       - "${DASHBOARD_PORT:-80}:80"
     volumes:
-      # optional: list the agents so the header shows a server selector
+      - ./nginx.monitor.conf:/etc/nginx/conf.d/default.conf:ro
       - ./servers.json:/usr/share/nginx/html/servers.json:ro
     restart: unless-stopped
 
@@ -35,3 +39,14 @@ services:
       ALERT_MEM: ${ALERT_MEM:-90}
       ALERT_DISK: ${ALERT_DISK:-85}
     restart: unless-stopped
+
+  # Optional https tunnel for the dashboard (Telegram Web App). Profile "ngrok".
+  ngrok:
+    image: ngrok/ngrok:latest
+    command: ["http", "dashboard:80", "--url", "${NGROK_DOMAIN:-}"]
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
+    depends_on:
+      - dashboard
+    restart: unless-stopped
+    profiles: ["ngrok"]
