@@ -199,7 +199,6 @@ def _status_text():
 
 def _command_loop():
     offset = 0
-    chat_id = telegram_bot.CHAT_ID
     while True:
         try:
             updates = telegram_bot._api("getUpdates", {"offset": offset, "timeout": 30})
@@ -210,15 +209,17 @@ def _command_loop():
             offset = upd["update_id"] + 1
             msg = upd.get("message") or {}
             text = (msg.get("text") or "").strip()
-            if str((msg.get("chat") or {}).get("id", "")) != chat_id:
+            chat = str((msg.get("chat") or {}).get("id", ""))
+            if chat not in telegram_bot.ALLOWED_IDS:
                 continue
             if text.startswith("/status"):
-                telegram_bot._send(_status_text())
+                telegram_bot._send(_status_text(), chat=chat)
             elif text.startswith("/start") or text.startswith("/help"):
                 telegram_bot._send(
                     "Central server monitor.\n"
                     "/status — all servers at a glance\n"
-                    "Alerts fire automatically on server down/up and threshold breaches."
+                    "Alerts fire automatically on server down/up and threshold breaches.",
+                    chat=chat,
                 )
 
 

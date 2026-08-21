@@ -27,6 +27,18 @@ TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
 DASHBOARD_URL = os.environ.get("DASHBOARD_URL", "").strip()
 
+# Where ALERTS are posted. Set TELEGRAM_ALERT_CHAT to a channel id (e.g.
+# -1001234567890, bot must be an admin) to broadcast alerts to a team.
+# Falls back to the owner's private chat.
+ALERT_CHAT = os.environ.get("TELEGRAM_ALERT_CHAT", "").strip() or CHAT_ID
+
+# Who may issue commands (/status). Comma list of user ids; defaults to the
+# owner. A channel that receives alerts does not need to be listed here —
+# commands come from users in private chat.
+ALLOWED_IDS = {
+    i.strip() for i in os.environ.get("TELEGRAM_ALLOWED_IDS", "").split(",") if i.strip()
+} or {CHAT_ID}
+
 THRESHOLDS = {
     "cpu": float(os.environ.get("ALERT_CPU", 90)),
     "mem": float(os.environ.get("ALERT_MEM", 90)),
@@ -51,22 +63,30 @@ def _api(method, payload, timeout=35):
         return json.loads(resp.read().decode())
 
 
-def _dashboard_button():
-    # Telegram Web App buttons (open inside Telegram) require HTTPS;
-    # for plain http (e.g. a ZeroTier address) fall back to a normal link.
-    if DASHBOARD_URL.startswith("https://"):
+def _dashboard_button(target):
+    # Web App buttons (open inside Telegram) require HTTPS *and* a private
+    # chat — channels/groups (negative ids) only accept plain url buttons.
+    private = not str(target).startswith("-")
+    if DASHBOARD_URL.startswith("https://") and private:
         return {"text": "📊 Open dashboard", "web_app": {"url": DASHBOARD_URL}}
     return {"text": "📊 Open dashboard", "url": DASHBOARD_URL}
 
 
-def _send(text):
-    payload = {"chat_id": CHAT_ID, "text": text, "parse_mode": "HTML"}
+def _send(text, chat=None):
+    target = chat or ALERT_CHAT
+    payload = {"chat_id": target, "text": text, "parse_mode": "HTML"}
     if DASHBOARD_URL:
-        payload["reply_markup"] = {"inline_keyboard": [[_dashboard_button()]]}
-    try:
-        _api("sendMessage", payload)
-    except Exception as e:
-        print(f"[telegram] send failed: {e}")
+        payload["reply_markup"] = {"inline_keyboard": [[_dashboard_button(target)]]}
+    # Retry a couple of times so a transient network blip doesn't drop an alert.
+    for attempt in range(3):
+        try:
+            _api("sendMessage", payload)
+            return
+        except Exception as e:
+            if attempt == 2:
+                print(f"[telegram] send failed after retries: {e}")
+            else:
+                time.sleep(2)
 
 
 def _status_text(status):
@@ -176,18 +196,19 @@ def _command_loop(get_status):
             msg = upd.get("message") or {}
             text = (msg.get("text") or "").strip()
             chat = str((msg.get("chat") or {}).get("id", ""))
-            if chat != CHAT_ID:
-                continue  # ignore anyone else
+            if chat not in ALLOWED_IDS:
+                continue  # ignore anyone not allowed
             if text.startswith("/status"):
                 try:
-                    _send(_status_text(get_status()))
+                    _send(_status_text(get_status()), chat=chat)
                 except Exception as e:
-                    _send(f"⚠️ Failed to read metrics: {e}")
+                    _send(f"⚠️ Failed to read metrics: {e}", chat=chat)
             elif text.startswith("/start") or text.startswith("/help"):
                 _send(
                     "Server monitoring bot.\n"
                     "/status — current CPU / memory / disk\n"
-                    "Alerts are sent automatically when thresholds are exceeded."
+                    "Alerts are sent automatically when thresholds are exceeded.",
+                    chat=chat,
                 )
 
 

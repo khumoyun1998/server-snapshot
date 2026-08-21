@@ -1,191 +1,259 @@
 # Server Snapshot
 
-A real-time server monitoring dashboard. A lightweight Python agent (Flask + psutil)
-collects system metrics — CPU, memory, disks, top processes, network — and a React
-dashboard polls it every 2 seconds. If the agent is unreachable, the dashboard falls
-back to mock data and shows a "mock" indicator in the header.
+A lightweight, self-hostable server monitoring system: a small Python **agent**
+collects system metrics on each machine, a React **dashboard** shows them live,
+and — when you run the separate **central monitor** — you get Telegram alerts
+including *whole-machine down* detection that a box can never report about itself.
+
+No SaaS, no account, no database. Prebuilt multi-arch images (amd64 + arm64),
+configured entirely with environment variables.
+
+---
+
+## Features
+
+- **Live metrics** — CPU (per-core, temp, load), memory + swap, disks, network,
+  top processes by CPU/memory.
+- **History charts** — CPU / memory / network over 15m · 1h · 6h · 24h.
+- **Docker panel** — every container with per-container CPU and memory.
+- **Watched processes** — named host processes (e.g. `dockerd`, `sshd`) with a
+  status badge; alert when one disappears.
+- **Login sessions** — who is logged in, from which IP, since when; alert on each
+  new login.
+- **Telegram alerts** — thresholds (CPU/mem/disk), process down, new login, and
+  **server DOWN/UP** with downtime. `/status` summarises every server on demand.
+  Alerts can broadcast to a **channel** for a whole team.
+- **Multi-server** — one dashboard and one bot watch many agents.
+- **Graceful fallback** — if an agent is unreachable the dashboard shows mock data
+  with a "mock" badge instead of breaking.
+
+---
 
 ## Architecture
 
-- **`server/monitor_agent.py`** — Python agent exposing `GET /api/metrics` on port 5050
-- **`src/`** — React + TypeScript + Tailwind (shadcn/ui) dashboard
-- **nginx** — serves the built frontend and proxies `/api` to the agent (Docker setup)
+```
+        ┌─────────────────────────────┐        ┌──────────────────────────────┐
+        │  MONITORED MACHINE (agent)  │        │   ALWAYS-ON HOST (monitor)   │
+        │                             │  poll  │                              │
+        │  monitor_agent.py  :5050    │◀───────│  monitor_service.py          │
+        │   /api/metrics              │  (HTTP │   → Telegram alerts + /status│
+        │   /api/history              │   over │  dashboard (nginx, proxies   │
+        │   /api/watch                │   VPN) │   /api to the agent)         │
+        └─────────────────────────────┘        └──────────────────────────────┘
+```
 
-## Run with prebuilt images (no source needed)
+**Components**
 
-Images for `linux/amd64` and `linux/arm64` are published to Docker Hub on every
-push to `main`. On any server, copy [docker-compose.prod.yml](docker-compose.prod.yml)
-and run:
+| Path | What it is |
+|---|---|
+| `server/monitor_agent.py` | Flask + psutil agent; serves the metrics API (and the built dashboard when run all-in-one) |
+| `server/docker_stats.py` | reads the Docker socket for container stats |
+| `server/telegram_bot.py` | Telegram transport: alert sending, `/status` command loop |
+| `server/monitor_service.py` | central monitor — polls remote agents, down-detection, alerts, `/status` |
+| `src/` | React + TypeScript + Tailwind (shadcn/ui) dashboard |
+| `nginx.conf` | all-in-one nginx: serves the dashboard, proxies `/api` to the local agent |
+| `nginx.monitor.conf` | monitor-host nginx: proxies `/api` to a *remote* agent (works over https) |
+
+**Agent API**
+
+| Endpoint | Returns |
+|---|---|
+| `GET /api/metrics` | server info, CPU, memory, disks, processes, network |
+| `GET /api/history?minutes=N` | downsampled CPU/mem/disk % and network KB/s for the last N minutes (24h in-memory ring buffer) |
+| `GET /api/watch` | watched processes, Docker containers, login sessions |
+
+**Images** (built for `linux/amd64` + `linux/arm64` on every push to `main`):
+`hxolmetov/server-snapshot` (dashboard) and `hxolmetov/server-snapshot-agent`
+(agent + monitor — same image, different command).
+
+---
+
+## Which deployment do you want?
+
+| Goal | Use |
+|---|---|
+| Watch **one machine**, dashboard on that machine | **A. All-in-one** |
+| Be alerted when a **machine goes down** (the real use case) | **B. Split: agent + central monitor** |
+| One dashboard/bot for **several machines** | B + [Multiple servers](#multiple-servers) |
+
+> **Why split?** An alerter running on the monitored box dies with it, so it can
+> never tell you the box is down. The central monitor runs elsewhere (a cheap
+> always-on VPS) and reports a machine as DOWN when its agent stops answering.
+
+---
+
+## A. All-in-one (single machine)
+
+Dashboard + agent on one host. Copy `docker-compose.prod.yml` and:
 
 ```sh
 DASHBOARD_PORT=8001 docker compose -f docker-compose.prod.yml up -d
-# open http://<server>:8001
+# open http://<host>:8001
 ```
 
-Update to the latest version at any time:
+Update any time:
 
 ```sh
 docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d
 ```
 
-`deploy.sh` automates this over SSH (ships the compose file, pulls and restarts).
+`deploy.sh` automates this over SSH. To build from source instead of pulling:
+`docker compose up -d --build`.
 
-## Build and run from source
+---
 
-```sh
-docker compose up -d --build
-# open http://localhost
-```
+## B. Split: agents + central monitor
 
-This starts two containers: nginx serving the built dashboard on port 80, and the
-monitoring agent. Note: inside a container the agent sees mostly the container's
-view of the system; for accurate host metrics run the agent directly on the host.
-
-## Run locally (development)
-
-Frontend:
-
-```sh
-npm i
-npm run dev          # http://localhost:8080
-```
-
-Agent:
-
-```sh
-python3 -m venv venvserver
-source venvserver/bin/activate
-pip install -r server/requirements.txt
-python server/monitor_agent.py       # http://localhost:5050
-```
-
-## Telegram alerts & remote status (optional)
-
-The agent can send Telegram alerts when CPU / memory / disk cross thresholds
-(with recovery messages) and answer `/status` in chat — so you can check the
-server from your phone without opening the dashboard. Every message carries an
-"Open dashboard" button when `DASHBOARD_URL` is set.
-
-Create a bot with [@BotFather](https://t.me/BotFather), find your chat id with
-[@userinfobot](https://t.me/userinfobot), then put these into `.env` next to
-the compose file:
-
-| Variable | Meaning | Default |
-|---|---|---|
-| `TELEGRAM_BOT_TOKEN` | bot token (empty = feature disabled) | — |
-| `TELEGRAM_CHAT_ID` | chat that receives alerts and may use commands | — |
-| `DASHBOARD_URL` | link for the inline dashboard button | — |
-| `ALERT_CPU` / `ALERT_MEM` | percent thresholds | 90 |
-| `ALERT_DISK` | percent threshold | 85 |
-| `ALERT_COOLDOWN` | seconds between repeat alerts | 1800 |
-| `WATCH_PROCESSES` | comma-separated process names to watch (e.g. `dockerd,ngrok,sshd`); Telegram alerts fire when one disappears | — |
-
-The dashboard also shows all Docker containers with per-container CPU/memory
-when the Docker socket is mounted (see `docker-compose.prod.yml`; remove the
-volume to disable).
-
-Login sessions: with `/var/run/utmp` mounted (see compose), the dashboard
-lists active sessions (user, source IP, terminal, time) and Telegram gets a
-🔵 alert on every new login and ⚪️ when a session closes.
-
-## Split deployment: agents + central monitor
-
-To be alerted when a whole machine goes down, the alerter must run somewhere
-else — a dead box can't page you. So agents run on the machines you watch, and
-a **central monitor** runs on an always-on host (e.g. a VPS) that polls them.
-
-```
- monitored machine(s)          always-on VPS
- ┌───────────────┐             ┌────────────────────────┐
- │ agent :8001   │◀── poll ────│ monitor  (Telegram bot)│
- │ /api/metrics  │             │ dashboard (nginx)      │
- └───────────────┘             └────────────────────────┘
-```
-
-**On each monitored machine** (`docker-compose.agent.yml`) — agent only, no
-Telegram (one bot token can only be polled from one place):
+**On each monitored machine** — agent only (`docker-compose.agent.yml`). No
+Telegram here: a bot token may be long-polled from only one place, and that
+place is the monitor.
 
 ```sh
 AGENT_PORT=8001 docker compose -f docker-compose.agent.yml up -d
 ```
 
-**On the VPS** (`docker-compose.monitor.yml`) — dashboard + monitor. Put the
-Telegram credentials and the agent list in `.env`:
+The agent must be reachable by the monitor over a private network — [ZeroTier](https://zerotier.com)
+or a WireGuard/Tailscale mesh works well and needs no public port.
+
+**On the always-on host** (`docker-compose.monitor.yml`) — dashboard + monitor
+(+ optional ngrok). Create `.env` next to the compose file:
 
 ```env
-DASHBOARD_PORT=80
-MONITOR_AGENTS=home=http://10.0.0.10:8001,vps2=http://10.0.0.11:8001
-TELEGRAM_BOT_TOKEN=...
-TELEGRAM_CHAT_ID=...
+MONITOR_AGENTS=home=http://10.0.0.10:8001
+TELEGRAM_BOT_TOKEN=123456:ABC...
+TELEGRAM_CHAT_ID=<your user id>
 DASHBOARD_URL=https://your-domain
 ```
 
 ```sh
-cp servers.example.json servers.json   # edit to taste
+cp servers.example.json servers.json    # see "Multiple servers"
 docker compose -f docker-compose.monitor.yml up -d
 ```
 
-The monitor sends 🔴 **Server DOWN** when an agent stops responding (after
-`MONITOR_FAILS` polls) and 🟢 **Server UP** with the downtime when it returns,
-plus the same threshold / watched-process / new-login alerts gathered remotely.
-`/status` summarises every agent. The monitored machines reach the VPS over
-whatever private network you choose (ZeroTier works well); with no token the
-monitor prints alerts to stdout (dry-run).
+The monitor sends 🔴 **Server DOWN** after `MONITOR_FAILS` failed polls and 🟢
+**Server UP** with the downtime when it returns, plus threshold / watched-process
+/ new-login alerts gathered remotely. `nginx.monitor.conf` proxies the dashboard's
+`/api` to the agent so the dashboard works over https with no mixed-content — set
+`servers.json` url to `""` to use that proxy.
+
+---
 
 ## Multiple servers
 
-The header shows a server selector when `servers.json` lists more than one
-entry. Mount your own file into the frontend container:
+List every agent in `MONITOR_AGENTS` (the monitor) and in `servers.json` (the
+dashboard's server selector):
+
+```env
+MONITOR_AGENTS=home=http://10.0.0.10:8001,vps2=http://10.0.0.11:8001
+```
 
 ```json
 [
   { "name": "home", "url": "" },
-  { "name": "vps-1", "url": "https://vps1.example.com:8001" }
+  { "name": "vps2", "url": "https://vps2.example.com" }
 ]
 ```
 
-```yaml
-    volumes:
-      - ./servers.json:/usr/share/nginx/html/servers.json:ro
+`url: ""` uses the monitor host's own `/api` proxy; a full URL points the browser
+directly at another dashboard/agent (CORS is enabled on the agent). More than one
+entry shows a dropdown in the header.
+
+---
+
+## Telegram
+
+1. Create a bot with [@BotFather](https://t.me/BotFather) → get the **token**.
+2. Get your numeric **chat id** from [@userinfobot](https://t.me/userinfobot).
+3. Put `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in the monitor's `.env`.
+
+**Commands** (from any allowed user, in a private chat with the bot):
+`/status` — every server's CPU/mem/disk at a glance; `/help`.
+
+**Team alerts → a channel.** To broadcast alerts to a group instead of one
+person, create a Telegram channel, add the bot as an **admin**, get the channel
+id (e.g. `-1001234567890`), and set:
+
+```env
+TELEGRAM_ALERT_CHAT=-1001234567890      # alerts go here (channel/group)
+TELEGRAM_ALLOWED_IDS=111111,222222      # who may run /status (optional; default = owner)
 ```
 
-Each URL must point at a reachable dashboard/agent (CORS is enabled on the
-agent), `""` means the server this dashboard is served from.
+Alerts then post to the channel (everyone subscribed sees them); commands still
+come from allowed users privately.
 
-### Telegram Web App via ngrok
-
-To open the dashboard inside Telegram from anywhere (no VPN), expose it over
-HTTPS with the bundled ngrok service. Claim your free static domain at
-[dashboard.ngrok.com](https://dashboard.ngrok.com/domains), then add to `.env`:
+**In-Telegram dashboard (Web App).** Expose the dashboard over https with the
+bundled ngrok service so the "Open dashboard" button opens inside Telegram:
 
 ```env
 COMPOSE_PROFILES=ngrok
-NGROK_AUTHTOKEN=<your token>
-NGROK_DOMAIN=<your-name>.ngrok-free.app
-DASHBOARD_URL=https://<your-name>.ngrok-free.app
+NGROK_AUTHTOKEN=<token>
+NGROK_DOMAIN=<name>.ngrok-free.app     # a free static domain
+DASHBOARD_URL=https://<name>.ngrok-free.app
 ```
 
-`docker compose up -d` then also starts the tunnel; the bot's "Open dashboard"
-button becomes a Telegram Web App (opens in-app). ⚠️ The tunnel makes the
-dashboard publicly reachable to anyone who knows the URL — treat the URL as a
-secret until authentication is added.
+---
 
-## Tests
+## Configuration reference
+
+**Agent** (`docker-compose.agent.yml` / `docker-compose.prod.yml`)
+
+| Variable | Meaning | Default |
+|---|---|---|
+| `AGENT_PORT` / `DASHBOARD_PORT` | host port | 8001 / 8080 |
+| `WATCH_PROCESSES` | comma list of process names to watch | `dockerd,sshd` |
+
+Mount `/var/run/docker.sock:ro` for the container panel and `/var/run/utmp:ro`
+for login sessions (both already in the compose files).
+
+**Monitor** (`docker-compose.monitor.yml`)
+
+| Variable | Meaning | Default |
+|---|---|---|
+| `MONITOR_AGENTS` | `name=url` comma list of agents to poll | — |
+| `MONITOR_INTERVAL` | seconds between polls | 30 |
+| `MONITOR_FAILS` | failed polls before DOWN | 2 |
+| `TELEGRAM_BOT_TOKEN` | bot token (empty = Telegram off) | — |
+| `TELEGRAM_CHAT_ID` | owner chat (alerts + commands) | — |
+| `TELEGRAM_ALERT_CHAT` | override alert target (channel id) | = chat id |
+| `TELEGRAM_ALLOWED_IDS` | user ids allowed to run commands | = chat id |
+| `DASHBOARD_URL` | link for the "Open dashboard" button | — |
+| `ALERT_CPU` / `ALERT_MEM` | percent thresholds | 90 |
+| `ALERT_DISK` | percent threshold | 85 |
+| `ALERT_COOLDOWN` | seconds between repeat alerts | 1800 |
+| `NGROK_AUTHTOKEN` / `NGROK_DOMAIN` | with `COMPOSE_PROFILES=ngrok` | — |
+
+With no bot token the monitor runs in **dry-run**: alerts print to stdout.
+
+---
+
+## Security
+
+- The dashboard and API have **no authentication** — anyone who can reach the URL
+  can read metrics. Keep it on a private network, or treat the ngrok URL as a
+  secret, until you add auth (nginx basic-auth or ngrok's built-in OAuth).
+- The agent reads the Docker socket **read-only** (list + stats, no control).
+- Secrets live only in `.env` files next to the compose files (git-ignored);
+  never bake them into images.
+
+---
+
+## Development
 
 ```sh
-npm test
+npm i && npm run dev          # dashboard at http://localhost:8080
+npm test                      # vitest
+npm run build                 # production build
+
+python3 -m venv venvserver && source venvserver/bin/activate
+pip install -r server/requirements.txt
+python server/monitor_agent.py    # agent at http://localhost:5050
 ```
 
-## CI/CD
+**CI/CD** — pushing to `main` builds and pushes both multi-arch images to Docker
+Hub (needs `DOCKER_USERNAME` / `DOCKER_PASSWORD` repo secrets). Add `[skip ci]`
+to a commit message for docs-only changes.
 
-Pushing to `main` triggers a GitHub Actions workflow that builds and pushes both
-Docker images to Docker Hub (`hxolmetov/server-snapshot` and
-`hxolmetov/server-snapshot-agent`). Requires `DOCKER_USERNAME` and
-`DOCKER_PASSWORD` repository secrets.
+## Tech stack
 
-## Technologies
-
-- Vite 8, TypeScript, React 18
-- shadcn/ui, Tailwind CSS
-- Python 3, Flask, psutil, gunicorn
-- Docker, nginx, GitHub Actions
+Vite · React 18 · TypeScript · Tailwind / shadcn-ui · Recharts — Python 3 · Flask
+· psutil · gunicorn — Docker · nginx · GitHub Actions.
