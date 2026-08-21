@@ -93,7 +93,28 @@ _state = {
 }
 
 
+# Maintenance mute: while active, alerts are suppressed (state still tracked, so
+# no backlog fires afterwards). Set via the /mute command — handy around a
+# planned reboot so it doesn't page you.
+_mute_until = 0.0
+
+
+def _parse_duration(s):
+    """'30m' / '2h' / bare number (minutes) → seconds; 0 if unparseable."""
+    s = s.strip().lower()
+    try:
+        if s.endswith("h"):
+            return int(float(s[:-1]) * 3600)
+        if s.endswith("m"):
+            return int(float(s[:-1]) * 60)
+        return int(s) * 60
+    except ValueError:
+        return 0
+
+
 def notify(text):
+    if time.time() < _mute_until:
+        return  # muted for maintenance
     if telegram_bot.TOKEN:
         telegram_bot._send(text)
     else:
@@ -244,7 +265,10 @@ def _poll_loop():
 
 
 def _status_text():
-    lines = ["🖥 <b>Servers</b>"]
+    lines = []
+    if time.time() < _mute_until:
+        lines.append(f"🔇 <i>alerts muted — {_fmt_downtime(_mute_until - time.time())} left</i>")
+    lines.append("🖥 <b>Servers</b>")
     for name, st in _state.items():
         if st["up"] is None:
             lines.append(f"⏳ <b>{name}</b> — checking…")
@@ -267,6 +291,7 @@ def _status_text():
 
 
 def _command_loop():
+    global _mute_until
     offset = 0
     while True:
         try:
@@ -284,10 +309,21 @@ def _command_loop():
                 continue
             if text.startswith("/status"):
                 telegram_bot._send(_status_text(), chat=chat, thread=thread)
+            elif text.startswith("/mute"):
+                secs = _parse_duration(text[len("/mute"):]) or 1800  # default 30m
+                _mute_until = time.time() + secs
+                telegram_bot._send(
+                    f"🔇 Alerts muted for {_fmt_downtime(secs)} (until then, no pages).",
+                    chat=chat, thread=thread,
+                )
+            elif text.startswith("/unmute"):
+                _mute_until = 0.0
+                telegram_bot._send("🔔 Alerts unmuted.", chat=chat, thread=thread)
             elif text.startswith("/start") or text.startswith("/help"):
                 telegram_bot._send(
                     "Central server monitor.\n"
                     "/status — all servers at a glance\n"
+                    "/mute 30m — silence alerts for a planned reboot (/mute 2h, /unmute)\n"
                     "Alerts fire automatically on server down/up and threshold breaches.",
                     chat=chat,
                     thread=thread,

@@ -137,7 +137,8 @@ dropdown in the header.
 2. Get your numeric **chat id** from [@userinfobot](https://t.me/userinfobot).
 3. Put `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in the monitor's `.env`.
 
-`/status` (in a private chat with the bot) shows every server's CPU/mem/disk.
+`/status` shows every server's CPU/mem/disk. `/mute 30m` (also `2h`, `/unmute`)
+silences alerts during a planned reboot so it doesn't page you.
 
 **Team alerts → a channel or group.** Add the bot to a channel/group, get its id
 (e.g. `-1001234567890`), and set `TELEGRAM_ALERT_CHAT` to it; alerts then reach
