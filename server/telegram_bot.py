@@ -32,6 +32,10 @@ DASHBOARD_URL = os.environ.get("DASHBOARD_URL", "").strip()
 # Falls back to the owner's private chat.
 ALERT_CHAT = os.environ.get("TELEGRAM_ALERT_CHAT", "").strip() or CHAT_ID
 
+# Optional forum topic (thread) inside the alert group — alerts post there
+# instead of the group's General topic. Empty = no specific topic.
+ALERT_THREAD = os.environ.get("TELEGRAM_ALERT_THREAD", "").strip()
+
 # Who may issue commands (/status). Comma list of user ids; defaults to the
 # owner. A channel that receives alerts does not need to be listed here —
 # commands come from users in private chat.
@@ -72,9 +76,17 @@ def _dashboard_button(target):
     return {"text": "📊 Open dashboard", "url": DASHBOARD_URL}
 
 
-def _send(text, chat=None):
+def _send(text, chat=None, thread=None):
     target = chat or ALERT_CHAT
     payload = {"chat_id": target, "text": text, "parse_mode": "HTML"}
+    # Post into a forum topic: an explicit thread (e.g. replying in the same
+    # topic) wins; otherwise use the configured alert topic for alert sends.
+    th = thread if thread is not None else (ALERT_THREAD if chat is None else None)
+    if th:
+        try:
+            payload["message_thread_id"] = int(th)
+        except ValueError:
+            pass
     if DASHBOARD_URL:
         payload["reply_markup"] = {"inline_keyboard": [[_dashboard_button(target)]]}
     # Retry a couple of times so a transient network blip doesn't drop an alert.
@@ -196,19 +208,21 @@ def _command_loop(get_status):
             msg = upd.get("message") or {}
             text = (msg.get("text") or "").strip()
             chat = str((msg.get("chat") or {}).get("id", ""))
+            thread = msg.get("message_thread_id")
             if chat not in ALLOWED_IDS:
                 continue  # ignore anyone not allowed
             if text.startswith("/status"):
                 try:
-                    _send(_status_text(get_status()), chat=chat)
+                    _send(_status_text(get_status()), chat=chat, thread=thread)
                 except Exception as e:
-                    _send(f"⚠️ Failed to read metrics: {e}", chat=chat)
+                    _send(f"⚠️ Failed to read metrics: {e}", chat=chat, thread=thread)
             elif text.startswith("/start") or text.startswith("/help"):
                 _send(
                     "Server monitoring bot.\n"
                     "/status — current CPU / memory / disk\n"
                     "Alerts are sent automatically when thresholds are exceeded.",
                     chat=chat,
+                    thread=thread,
                 )
 
 

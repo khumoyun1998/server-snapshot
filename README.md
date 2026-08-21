@@ -214,8 +214,9 @@ for login sessions (both already in the compose files).
 | `MONITOR_FAILS` | failed polls before DOWN | 2 |
 | `TELEGRAM_BOT_TOKEN` | bot token (empty = Telegram off) | — |
 | `TELEGRAM_CHAT_ID` | owner chat (alerts + commands) | — |
-| `TELEGRAM_ALERT_CHAT` | override alert target (channel id) | = chat id |
-| `TELEGRAM_ALLOWED_IDS` | user ids allowed to run commands | = chat id |
+| `TELEGRAM_ALERT_CHAT` | override alert target (channel/group id) | = chat id |
+| `TELEGRAM_ALERT_THREAD` | forum topic id in the alert group (post into one topic) | — |
+| `TELEGRAM_ALLOWED_IDS` | ids allowed to run commands (add the group id to allow `/status` inside it) | = chat id |
 | `DASHBOARD_URL` | link for the "Open dashboard" button | — |
 | `ALERT_CPU` / `ALERT_MEM` | percent thresholds | 90 |
 | `ALERT_DISK` | percent threshold | 85 |

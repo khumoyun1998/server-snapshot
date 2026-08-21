@@ -210,16 +210,18 @@ def _command_loop():
             msg = upd.get("message") or {}
             text = (msg.get("text") or "").strip()
             chat = str((msg.get("chat") or {}).get("id", ""))
+            thread = msg.get("message_thread_id")
             if chat not in telegram_bot.ALLOWED_IDS:
                 continue
             if text.startswith("/status"):
-                telegram_bot._send(_status_text(), chat=chat)
+                telegram_bot._send(_status_text(), chat=chat, thread=thread)
             elif text.startswith("/start") or text.startswith("/help"):
                 telegram_bot._send(
                     "Central server monitor.\n"
                     "/status — all servers at a glance\n"
                     "Alerts fire automatically on server down/up and threshold breaches.",
                     chat=chat,
+                    thread=thread,
                 )
 
 
