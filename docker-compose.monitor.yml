@@ -43,6 +43,7 @@ services:
       ALERT_DISK: ${ALERT_DISK:-85}
       HTTP_CHECKS: ${HTTP_CHECKS:-}
       HEALTHCHECK_URL: ${HEALTHCHECK_URL:-}
+      DISK_PREDICT_DAYS: ${DISK_PREDICT_DAYS:-7}
     restart: unless-stopped
 
   # Optional: an agent for the monitor host itself, so /status and alerts cover

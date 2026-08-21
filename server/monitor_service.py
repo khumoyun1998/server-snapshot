@@ -63,6 +63,12 @@ def _parse_http_checks():
 HTTP_CHECKS = _parse_http_checks()
 _check_state = {c["name"]: {"url": c["url"], "up": None, "fails": 0} for c in HTTP_CHECKS}
 
+# Proactive disk-fill prediction: from an agent's history, project when the disk
+# reaches 100%. Alert if sooner than this many days (0 = off). Uses the on-disk
+# history, so it needs the agent's HISTORY_DB (or at least hours of uptime).
+DISK_PREDICT_DAYS = float(os.environ.get("DISK_PREDICT_DAYS", 7))
+_predict_tick = 0
+
 
 def _parse_agents():
     agents = []
@@ -88,6 +94,7 @@ _state = {
         "thresh": {m: {"active": False, "last": 0.0} for m in THRESHOLDS},
         "procs": {},         # name -> was_running
         "sessions": None,    # set of session tuples
+        "disk_alert": 0.0,   # last disk-prediction alert time (daily cooldown)
     }
     for a in AGENTS
 }
@@ -254,13 +261,55 @@ def _ping_healthcheck():
         pass  # a missed ping is exactly what the external watchdog reacts to
 
 
+def _linfit_slope(points):
+    """Least-squares slope of y over t (per second). points: [(t, y), ...]."""
+    n = len(points)
+    if n < 2:
+        return 0.0
+    mt = sum(p[0] for p in points) / n
+    my = sum(p[1] for p in points) / n
+    num = sum((p[0] - mt) * (p[1] - my) for p in points)
+    den = sum((p[0] - mt) ** 2 for p in points)
+    return num / den if den else 0.0
+
+
+def _check_disk_prediction(name, st):
+    if DISK_PREDICT_DAYS <= 0:
+        return
+    try:
+        hist = _get_json(st["url"] + "/api/history?minutes=1440")
+    except Exception:
+        return
+    pts = [(h["t"], h["disk"]) for h in hist if "disk" in h]
+    if len(pts) < 20 or pts[-1][0] - pts[0][0] < 6 * 3600:
+        return  # need at least ~6h of data to trust a trend
+    slope = _linfit_slope(pts)          # % per second
+    if slope <= 0:
+        return                          # not filling
+    current = pts[-1][1]
+    days_to_full = (100 - current) / (slope * 86400)
+    now = time.time()
+    if days_to_full < DISK_PREDICT_DAYS and now - st["disk_alert"] >= 86400:
+        st["disk_alert"] = now
+        notify(
+            f"🟠 <b>Disk filling</b> on <b>{name}</b>\n"
+            f"Disk at {current:.0f}%, projected full in ~{days_to_full:.1f} days"
+        )
+
+
 def _poll_loop():
+    global _predict_tick
     while True:
         for name, st in _state.items():
             _poll_agent(name, st)
         for name, st in _check_state.items():
             _http_check_one(name, st)
         _ping_healthcheck()
+        _predict_tick += 1
+        if _predict_tick % max(1, 3600 // INTERVAL) == 0:   # ~hourly
+            for name, st in _state.items():
+                if st["up"]:
+                    _check_disk_prediction(name, st)
         time.sleep(INTERVAL)
 
 

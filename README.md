@@ -189,6 +189,7 @@ for login sessions (both already in the compose files).
 | `ALERT_COOLDOWN` | seconds between repeat alerts | 1800 |
 | `HTTP_CHECKS` | `name=url` endpoints to health-check | — |
 | `HEALTHCHECK_URL` | dead-man's switch ping URL | — |
+| `DISK_PREDICT_DAYS` | warn when a disk is projected to fill within this many days (0 = off) | 7 |
 | `NGROK_AUTHTOKEN` / `NGROK_DOMAIN` | with `COMPOSE_PROFILES=ngrok` | — |
 
 With no bot token the monitor runs in **dry-run** and prints alerts to stdout.
