@@ -18,12 +18,12 @@ const RANGES = [
   { label: "24h", minutes: 1440 },
 ] as const;
 
-// Fixed series colors — validated categorical palette (see dataviz notes)
+// Signal palette — violet-forward, distinct hues per chart pair
 const SERIES = {
-  cpu: { color: "#0284c7", label: "CPU" },
-  mem: { color: "#8b5cf6", label: "Memory" },
-  rx: { color: "#0d9488", label: "Download" },
-  tx: { color: "#db2777", label: "Upload" },
+  cpu: { color: "#a78bfa", label: "CPU" },
+  mem: { color: "#22d3ee", label: "Memory" },
+  rx: { color: "#34d399", label: "Download" },
+  tx: { color: "#fb7185", label: "Upload" },
 } as const;
 
 const formatTime = (t: number) =>
@@ -65,8 +65,8 @@ const ChartTooltip = ({
   );
 };
 
-const axisStyle = { fontSize: 11, fill: "hsl(215 16% 47%)" };
-const gridStroke = "hsl(214 20% 90%)";
+const axisStyle = { fontSize: 11, fill: "hsl(246 13% 66%)" };
+const gridStroke = "hsl(240 16% 20%)";
 
 const HistoryChartCard = ({
   title,
@@ -121,11 +121,11 @@ const HistoryChartCard = ({
                 dataKey={s.key}
                 name={s.label}
                 stroke={s.color}
-                strokeWidth={2}
+                strokeWidth={2.2}
                 fill={s.color}
-                fillOpacity={0.08}
+                fillOpacity={0.16}
                 dot={false}
-                activeDot={{ r: 4, strokeWidth: 2, stroke: "hsl(0 0% 100%)" }}
+                activeDot={{ r: 4, strokeWidth: 2, stroke: "hsl(240 20% 9%)" }}
                 isAnimationActive={false}
               />
             ))}

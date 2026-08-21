@@ -19,7 +19,7 @@ const HeaderStrip = ({ server, dataSource, servers, currentServer, onServerChang
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
           <Server className="h-5 w-5 text-primary" />
-          <h1 className="text-lg font-semibold text-foreground">{server.hostname}</h1>
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">{server.hostname}</h1>
         </div>
         {servers && servers.length > 1 && onServerChange && (
           <select

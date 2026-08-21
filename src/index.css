@@ -1,80 +1,86 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+  /* Signal — graphic dark, violet accent. This is the default look. */
   :root {
-    --background: 210 20% 98%;
-    --foreground: 222 47% 11%;
+    --background: 240 20% 9%;
+    --foreground: 250 30% 96%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card: 240 18% 13%;
+    --card-foreground: 250 30% 96%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
+    --popover: 240 18% 13%;
+    --popover-foreground: 250 30% 96%;
 
-    --primary: 200 98% 39%;
+    --primary: 252 100% 68%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 20% 95%;
-    --secondary-foreground: 222 47% 11%;
+    --secondary: 240 16% 18%;
+    --secondary-foreground: 250 20% 92%;
 
-    --muted: 210 16% 93%;
-    --muted-foreground: 215 16% 47%;
+    --muted: 240 15% 17%;
+    --muted-foreground: 246 13% 66%;
 
-    --accent: 210 20% 95%;
-    --accent-foreground: 222 47% 11%;
+    --accent: 240 16% 20%;
+    --accent-foreground: 250 20% 92%;
 
-    --destructive: 0 84% 60%;
+    --destructive: 351 90% 68%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 142 71% 45%;
-    --success-foreground: 0 0% 100%;
+    --success: 160 64% 52%;
+    --success-foreground: 160 60% 12%;
 
-    --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 100%;
+    --warning: 43 96% 56%;
+    --warning-foreground: 40 60% 12%;
 
-    --border: 214 20% 90%;
-    --input: 214 20% 90%;
-    --ring: 200 98% 39%;
+    --border: 240 16% 20%;
+    --input: 240 16% 22%;
+    --ring: 252 100% 68%;
 
-    --radius: 0.375rem;
+    --radius: 1rem;
 
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-background: 240 18% 13%;
+    --sidebar-foreground: 250 20% 92%;
+    --sidebar-primary: 252 100% 68%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 16% 20%;
+    --sidebar-accent-foreground: 250 20% 92%;
+    --sidebar-border: 240 16% 20%;
+    --sidebar-ring: 252 100% 68%;
 
-    --font-sans: 'Inter', system-ui, sans-serif;
+    --font-sans: 'Sora', system-ui, sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
   }
 
+  /* .dark keeps the same Signal palette so class-based dark stays consistent */
   .dark {
-    --background: 222 47% 6%;
-    --foreground: 210 20% 95%;
-    --card: 222 47% 9%;
-    --card-foreground: 210 20% 95%;
-    --popover: 222 47% 9%;
-    --popover-foreground: 210 20% 95%;
-    --primary: 200 98% 39%;
+    --background: 240 20% 9%;
+    --foreground: 250 30% 96%;
+    --card: 240 18% 13%;
+    --card-foreground: 250 30% 96%;
+    --popover: 240 18% 13%;
+    --popover-foreground: 250 30% 96%;
+    --primary: 252 100% 68%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 217 33% 17%;
-    --secondary-foreground: 210 20% 95%;
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 217 33% 17%;
-    --accent-foreground: 210 20% 95%;
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 210 20% 95%;
-    --border: 217 33% 17%;
-    --input: 217 33% 17%;
-    --ring: 212 27% 84%;
+    --secondary: 240 16% 18%;
+    --secondary-foreground: 250 20% 92%;
+    --muted: 240 15% 17%;
+    --muted-foreground: 246 13% 66%;
+    --accent: 240 16% 20%;
+    --accent-foreground: 250 20% 92%;
+    --destructive: 351 90% 68%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 160 64% 52%;
+    --success-foreground: 160 60% 12%;
+    --warning: 43 96% 56%;
+    --warning-foreground: 40 60% 12%;
+    --border: 240 16% 20%;
+    --input: 240 16% 22%;
+    --ring: 252 100% 68%;
   }
 }
 
@@ -85,6 +91,9 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
+    background-image: radial-gradient(120% 90% at 100% 0%, hsl(255 40% 16%) 0%, hsl(240 20% 9%) 55%);
+    background-attachment: fixed;
+    min-height: 100vh;
   }
 }
 
