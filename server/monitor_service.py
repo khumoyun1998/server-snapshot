@@ -198,6 +198,11 @@ def _check_watch(name, st):
                 f"User: <code>{user}</code>\nFrom: <code>{src}</code>\n"
                 f"Terminal: {term or '—'}\nAt: {since}"
             )
+        for user, term, src, since in sorted(st["sessions"] - current):
+            notify(
+                f"⚪️ <b>Session closed</b> on <b>{name}</b>\n"
+                f"<code>{user}</code> from <code>{src}</code> (was since {since})"
+            )
     st["sessions"] = current
 
 
