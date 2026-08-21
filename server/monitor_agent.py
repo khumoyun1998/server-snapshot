@@ -17,6 +17,7 @@ Usage:
 
 import socket
 import platform
+import sqlite3
 import threading
 import time
 import datetime
@@ -42,8 +43,57 @@ BOOT_TIME = psutil.boot_time()
 # ---------- Metrics history (in-memory ring buffer) ----------
 
 HISTORY_INTERVAL = 5                      # seconds between samples
-HISTORY_MAX = 24 * 3600 // HISTORY_INTERVAL   # keep 24 hours
+HISTORY_MAX = 24 * 3600 // HISTORY_INTERVAL   # keep 24 hours in memory
 HISTORY = deque(maxlen=HISTORY_MAX)
+
+# Optional on-disk persistence so the charts survive a restart. Set HISTORY_DB
+# to a file on a mounted volume (e.g. /data/history.db); empty = memory only.
+HISTORY_DB = os.environ.get("HISTORY_DB", "").strip()
+HISTORY_RETENTION = 7 * 24 * 3600        # keep 7 days on disk
+_db = None
+_db_lock = threading.Lock()
+_prune_tick = 0
+
+
+def _db_init():
+    global _db
+    if not HISTORY_DB:
+        return
+    try:
+        conn = sqlite3.connect(HISTORY_DB, check_same_thread=False)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS samples "
+            "(t INTEGER PRIMARY KEY, cpu REAL, mem REAL, disk REAL, rx INTEGER, tx INTEGER)"
+        )
+        conn.commit()
+        cutoff = int(time.time()) - HISTORY_MAX * HISTORY_INTERVAL
+        rows = conn.execute(
+            "SELECT t, cpu, mem, disk, rx, tx FROM samples WHERE t >= ? ORDER BY t", (cutoff,)
+        ).fetchall()
+        for t, cpu, mem, disk, rx, tx in rows:
+            HISTORY.append({"t": t, "cpu": cpu, "mem": mem, "disk": disk, "rx": rx, "tx": tx})
+        _db = conn
+        print(f"[history] persistence on ({HISTORY_DB}) — loaded {len(rows)} recent samples")
+    except Exception as e:
+        print(f"[history] sqlite disabled: {e}")
+
+
+def _db_write(sample):
+    global _prune_tick
+    if _db is None:
+        return
+    try:
+        with _db_lock:
+            _db.execute(
+                "INSERT OR REPLACE INTO samples VALUES (?, ?, ?, ?, ?, ?)",
+                (sample["t"], sample["cpu"], sample["mem"], sample["disk"], sample["rx"], sample["tx"]),
+            )
+            _prune_tick += 1
+            if _prune_tick % 120 == 0:   # ~every 10 min: drop rows past retention
+                _db.execute("DELETE FROM samples WHERE t < ?", (int(time.time()) - HISTORY_RETENTION,))
+            _db.commit()
+    except Exception:
+        pass
 
 
 def _sample_loop():
@@ -52,19 +102,22 @@ def _sample_loop():
             mem = psutil.virtual_memory()
             net = psutil.net_io_counters()
             disk = psutil.disk_usage("/")
-            HISTORY.append({
+            sample = {
                 "t": int(time.time()),
                 "cpu": round(psutil.cpu_percent(interval=None), 1),
                 "mem": round(mem.percent, 1),
                 "disk": round(disk.percent, 1),
                 "rx": net.bytes_recv,
                 "tx": net.bytes_sent,
-            })
+            }
+            HISTORY.append(sample)
+            _db_write(sample)
         except Exception:
             pass
         time.sleep(HISTORY_INTERVAL)
 
 
+_db_init()
 threading.Thread(target=_sample_loop, daemon=True).start()
 
 

@@ -13,7 +13,12 @@ services:
     environment:
       # Watched process names surface in /api/watch for the central monitor.
       WATCH_PROCESSES: ${WATCH_PROCESSES:-dockerd,sshd}
+      HISTORY_DB: /data/history.db          # persist history across restarts
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/run/utmp:/var/run/utmp:ro
+      - agent-data:/data
     restart: unless-stopped
+
+volumes:
+  agent-data:

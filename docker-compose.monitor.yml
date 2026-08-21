@@ -45,6 +45,22 @@ services:
       HEALTHCHECK_URL: ${HEALTHCHECK_URL:-}
     restart: unless-stopped
 
+  # Optional: an agent for the monitor host itself, so /status and alerts cover
+  # this box too. Enable with COMPOSE_PROFILES=selfagent (comma-join with ngrok)
+  # and add e.g. vps=http://agent:5050 to MONITOR_AGENTS.
+  agent:
+    image: hxolmetov/server-snapshot-agent:latest
+    pid: "host"
+    environment:
+      WATCH_PROCESSES: ${WATCH_PROCESSES:-dockerd,sshd}
+      HISTORY_DB: /data/history.db
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/run/utmp:/var/run/utmp:ro
+      - agent-data:/data
+    restart: unless-stopped
+    profiles: ["selfagent"]
+
   # Optional https tunnel for the dashboard (Telegram Web App). Profile "ngrok".
   ngrok:
     image: ngrok/ngrok:latest
@@ -55,3 +71,6 @@ services:
       - dashboard
     restart: unless-stopped
     profiles: ["ngrok"]
+
+volumes:
+  agent-data:

@@ -165,6 +165,7 @@ DASHBOARD_URL=https://<name>.ngrok-free.app
 |---|---|---|
 | `AGENT_PORT` / `DASHBOARD_PORT` | host port | 8001 / 8080 |
 | `WATCH_PROCESSES` | comma list of process names to watch | `dockerd,sshd` |
+| `HISTORY_DB` | path for on-disk history (a mounted volume) so charts survive restarts; empty = memory only | `/data/history.db` |
 
 Mount `/var/run/docker.sock:ro` for the container panel and `/var/run/utmp:ro`
 for login sessions (both already in the compose files).

@@ -27,11 +27,13 @@ services:
       ALERT_DISK: ${ALERT_DISK:-85}
       # Comma-separated process names to watch, e.g. "dockerd,ngrok,sshd"
       WATCH_PROCESSES: ${WATCH_PROCESSES:-}
+      HISTORY_DB: /data/history.db          # persist history across restarts
     volumes:
       # read-only Docker socket → container list + stats on the dashboard
       - /var/run/docker.sock:/var/run/docker.sock:ro
       # host login records → session list + "new login" Telegram alerts
       - /var/run/utmp:/var/run/utmp:ro
+      - agent-data:/data
     restart: unless-stopped
 
   # Public HTTPS tunnel for the dashboard (Telegram Web App needs https).
@@ -46,6 +48,9 @@ services:
       - frontend
     restart: unless-stopped
     profiles: ["ngrok"]
+
+volumes:
+  agent-data:
 
 networks:
   default:
