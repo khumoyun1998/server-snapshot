@@ -38,7 +38,7 @@ ssh "$SSH_ALIAS" "cd $REMOTE_DIR && docker compose pull && docker compose up -d"
 
 echo "==> 3/3  Holat:"
 ssh "$SSH_ALIAS" "cd $REMOTE_DIR && docker compose ps --format 'table {{.Service}}\t{{.Status}}'"
-echo "✅ Deploy tugadi: http://10.0.0.10:$DASHBOARD_PORT (Windows port-forward bo'lsa)"
+echo "✅ Deploy tugadi: dashboard $DASHBOARD_PORT-portда"
 
 if $FOLLOW_LOGS; then
   ssh -t "$SSH_ALIAS" "cd $REMOTE_DIR && docker compose logs -f $LOG_SERVICE"
