@@ -7,6 +7,7 @@ import SystemInfoPanel from "@/components/dashboard/SystemInfoPanel";
 import DiskTable from "@/components/dashboard/DiskTable";
 import CpuCoreGrid from "@/components/dashboard/CpuCoreGrid";
 import WatchedPanel from "@/components/dashboard/WatchedPanel";
+import AlertsPanel from "@/components/dashboard/AlertsPanel";
 
 // recharts is heavy — keep it in a lazy chunk so the initial load stays small
 const HistoryCharts = lazy(() => import("@/components/dashboard/HistoryCharts"));
@@ -62,6 +63,8 @@ const Index = () => {
       />
 
       <main className="container py-6 space-y-4">
+        <AlertsPanel base={base} />
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <MetricCard
             title="CPU Usage"

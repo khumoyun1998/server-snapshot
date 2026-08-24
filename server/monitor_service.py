@@ -24,6 +24,7 @@ Standard library only. Configure via env vars:
 With no bot token the service runs in dry-run mode and prints alerts.
 """
 
+import http.server
 import json
 import os
 import threading
@@ -93,8 +94,11 @@ _state = {
         "metrics": None,     # last good percentages for /status
         "thresh": {m: {"active": False, "last": 0.0} for m in THRESHOLDS},
         "procs": {},         # name -> was_running
+        "containers": {},    # name -> was_running
+        "down_containers": set(),  # containers that were running and stopped
         "sessions": None,    # set of session tuples
         "disk_alert": 0.0,   # last disk-prediction alert time (daily cooldown)
+        "disk_full_in": None,  # last projected days-to-full (for the alerts page)
     }
     for a in AGENTS
 }
@@ -186,6 +190,20 @@ def _check_watch(name, st):
             notify(f"🔴 <b>Process down</b> on <b>{name}</b>\n<code>{pname}</code> is not running")
         elif not was and running:
             notify(f"🟢 <b>Process back</b> on <b>{name}</b>\n<code>{pname}</code> is running again")
+    # docker containers (alert only on a running container changing state, so
+    # a one-shot container that stays "exited" never pages)
+    for c in watch.get("containers", []):
+        cname, running = c["name"], c.get("state") == "running"
+        was = st["containers"].get(cname)
+        st["containers"][cname] = running
+        if was is None:
+            continue
+        if was and not running:
+            st["down_containers"].add(cname)
+            notify(f"🔴 <b>Container stopped</b> on <b>{name}</b>\n<code>{cname}</code> ({c.get('status', '')})")
+        elif not was and running:
+            st["down_containers"].discard(cname)
+            notify(f"🟢 <b>Container started</b> on <b>{name}</b>\n<code>{cname}</code>")
     # login sessions
     current = {
         (s["user"], s.get("terminal", ""), s.get("host", ""), s.get("since", ""))
@@ -290,9 +308,11 @@ def _check_disk_prediction(name, st):
         return  # need at least ~6h of data to trust a trend
     slope = _linfit_slope(pts)          # % per second
     if slope <= 0:
+        st["disk_full_in"] = None
         return                          # not filling
     current = pts[-1][1]
     days_to_full = (100 - current) / (slope * 86400)
+    st["disk_full_in"] = round(days_to_full, 1) if days_to_full < DISK_PREDICT_DAYS else None
     now = time.time()
     if days_to_full < DISK_PREDICT_DAYS and now - st["disk_alert"] >= 86400:
         st["disk_alert"] = now
@@ -342,6 +362,67 @@ def _status_text():
             icon = "⏳" if st["up"] is None else ("🟢" if st["up"] else "🔴")
             lines.append(f"{icon} <b>{name}</b>")
     return "\n".join(lines)
+
+
+def _active_alerts():
+    """Current unresolved problems, for the dashboard's alerts page."""
+    out = []
+    now = time.time()
+    for name, st in _state.items():
+        if st["up"] is False:
+            out.append({"server": name, "type": "down", "severity": "critical",
+                        "message": "Server not responding", "since": int(st["down_since"])})
+            continue
+        if st["up"] is None:
+            continue
+        m = st["metrics"] or {}
+        for metric, ts in st["thresh"].items():
+            if ts["active"]:
+                out.append({"server": name, "type": "threshold", "severity": "warning",
+                            "message": f"{METRIC_NAMES[metric]} {m.get(metric, 0):.0f}% "
+                                       f"(limit {THRESHOLDS[metric]:.0f}%)"})
+        for pname, running in st["procs"].items():
+            if not running:
+                out.append({"server": name, "type": "process", "severity": "critical",
+                            "message": f"Process {pname} not running"})
+        for cname in sorted(st["down_containers"]):
+            out.append({"server": name, "type": "container", "severity": "critical",
+                        "message": f"Container {cname} stopped"})
+        if st["disk_full_in"] is not None:
+            out.append({"server": name, "type": "disk", "severity": "warning",
+                        "message": f"Disk projected full in ~{st['disk_full_in']} days"})
+    for cname, cst in _check_state.items():
+        if cst["up"] is False:
+            out.append({"server": cname, "type": "service", "severity": "critical",
+                        "message": "Service not responding"})
+    return {
+        "muted": now < _mute_until,
+        "muteUntil": int(_mute_until) if now < _mute_until else 0,
+        "generated": int(now),
+        "alerts": out,
+    }
+
+
+class _AlertHandler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path.rstrip("/") in ("/alerts", "/api/alerts"):
+            body = json.dumps(_active_alerts()).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def log_message(self, *args):
+        pass  # keep the poll loop's logs clean
+
+
+def _serve_http():
+    http.server.ThreadingHTTPServer(("0.0.0.0", 5051), _AlertHandler).serve_forever()
 
 
 def _command_loop():
@@ -396,6 +477,8 @@ def main():
     if not telegram_bot.TOKEN:
         print("[monitor] no TELEGRAM_BOT_TOKEN — dry-run, alerts print to stdout")
     threading.Thread(target=_poll_loop, daemon=True).start()
+    threading.Thread(target=_serve_http, daemon=True).start()  # /alerts endpoint
+    print("[monitor] alerts endpoint on :5051")
     if telegram_bot.TOKEN:
         _command_loop()  # blocks
     else:

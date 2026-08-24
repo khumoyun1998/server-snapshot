@@ -94,6 +94,35 @@ export async function fetchServers(): Promise<ServerEntry[]> {
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
+export interface AlertItem {
+  server: string;
+  type: string; // down | threshold | process | container | disk | service
+  severity: "critical" | "warning";
+  message: string;
+  since?: number;
+}
+
+export interface AlertsResponse {
+  muted: boolean;
+  muteUntil: number;
+  generated: number;
+  alerts: AlertItem[];
+}
+
+// Returns null when the monitor's /alerts endpoint isn't present (e.g. the
+// all-in-one deployment with no central monitor) — the panel then hides.
+export async function fetchAlerts(base = ""): Promise<AlertsResponse | null> {
+  try {
+    const res = await fetch(`${base || API_URL}/alerts`);
+    if (!res.ok) throw new Error();
+    const ct = res.headers.get("content-type") || "";
+    if (!ct.includes("application/json")) throw new Error();
+    return (await res.json()) as AlertsResponse;
+  } catch {
+    return null;
+  }
+}
+
 const MOCK_WATCH: WatchResponse = {
   processes: [
     { name: "dockerd", count: 1, cpu: 1.2, mem: 3.4, running: true },
