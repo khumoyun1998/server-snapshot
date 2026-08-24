@@ -44,6 +44,9 @@ services:
       HTTP_CHECKS: ${HTTP_CHECKS:-}
       HEALTHCHECK_URL: ${HEALTHCHECK_URL:-}
       DISK_PREDICT_DAYS: ${DISK_PREDICT_DAYS:-7}
+    # lets HTTP_CHECKS reach services published on the host (host.docker.internal)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
   # Optional: an agent for the monitor host itself, so /status and alerts cover
