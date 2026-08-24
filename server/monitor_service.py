@@ -204,6 +204,8 @@ def _check_watch(name, st):
         elif not was and running:
             st["down_containers"].discard(cname)
             notify(f"🟢 <b>Container started</b> on <b>{name}</b>\n<code>{cname}</code>")
+    # a container that was removed no longer appears — drop it from the alert set
+    st["down_containers"] &= {c["name"] for c in watch.get("containers", [])}
     # login sessions
     current = {
         (s["user"], s.get("terminal", ""), s.get("host", ""), s.get("since", ""))
